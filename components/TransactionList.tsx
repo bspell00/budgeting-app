@@ -60,6 +60,7 @@ interface TransactionListProps {
     }>;
   }>;
   onCreateCategory?: (categoryName: string, groupName: string) => void;
+  isAccountView?: boolean; // New prop to indicate if viewing specific account
 }
 
 export default function TransactionList({ 
@@ -75,7 +76,8 @@ export default function TransactionList({
   accounts = [],
   categories = [],
   categoryGroups = [],
-  onCreateCategory
+  onCreateCategory,
+  isAccountView = false
 }: TransactionListProps) {
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'category'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -341,7 +343,7 @@ export default function TransactionList({
         <div className="bg-found-surface border-found-divider overflow-hidden">
           {/* Table Header */}
           <div className="bg-found-divider border-b border-found-divider px-2 sm:px-4 py-3 hidden sm:block">
-            <div className="grid grid-cols-16 gap-2 sm:gap-4 text-sm font-medium text-found-text">
+            <div className={`grid gap-2 sm:gap-4 text-sm font-medium text-found-text ${isAccountView ? 'grid-cols-14' : 'grid-cols-16'}`}>
               <div className="col-span-1 flex justify-center">
                 <input
                   type="checkbox"
@@ -362,7 +364,7 @@ export default function TransactionList({
               <div className="col-span-2">Date</div>
               <div className="col-span-3">Payee</div>
               <div className="col-span-2">Category</div>
-              <div className="col-span-2">Account</div>
+              {!isAccountView && <div className="col-span-2">Account</div>}
               <div className="col-span-1 text-right">Outflow</div>
               <div className="col-span-1 text-right">Inflow</div>
               <div className="col-span-1 text-center">C</div>
@@ -375,7 +377,7 @@ export default function TransactionList({
             {/* Inline Transaction Entry Row */}
             {showNewRow && (
               <div className="px-4 py-3 bg-found-primary/10 border-b-2 border-found-primary/20">
-                <div className="grid grid-cols-16 gap-4 text-sm">
+                <div className={`grid gap-4 text-sm ${isAccountView ? 'grid-cols-14' : 'grid-cols-16'}`}>
                   {/* Empty checkbox column */}
                   <div className="col-span-1"></div>
                   {/* Empty flag column */}
@@ -442,34 +444,36 @@ export default function TransactionList({
                     </button>
                   </div>
                   
-                  {/* Account */}
-                  <div className="col-span-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setNewTransactionAccountFlyoutPosition({
-                          top: rect.bottom + 10,
-                          left: rect.left
-                        });
-                        setShowNewTransactionAccountFlyout(true);
-                        // Close other flyouts
-                        setShowNewTransactionCategoryFlyout(false);
-                        setShowCategoryFlyout(false);
-                      }}
-                      className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-left ${
-                        !newTransaction.accountId || newTransaction.accountId.trim() === '' 
-                          ? 'text-gray-400' 
-                          : 'text-gray-700'
-                      }`}
-                    >
-                      {newTransaction.accountId ? 
-                        accounts.find(a => a.id === newTransaction.accountId)?.accountName || 'Select Account' : 
-                        'Select Account'
-                      }
-                    </button>
-                  </div>
+                  {/* Account - only show if not in account view */}
+                  {!isAccountView && (
+                    <div className="col-span-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setNewTransactionAccountFlyoutPosition({
+                            top: rect.bottom + 10,
+                            left: rect.left
+                          });
+                          setShowNewTransactionAccountFlyout(true);
+                          // Close other flyouts
+                          setShowNewTransactionCategoryFlyout(false);
+                          setShowCategoryFlyout(false);
+                        }}
+                        className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-left ${
+                          !newTransaction.accountId || newTransaction.accountId.trim() === '' 
+                            ? 'text-gray-400' 
+                            : 'text-gray-700'
+                        }`}
+                      >
+                        {newTransaction.accountId ? 
+                          accounts.find(a => a.id === newTransaction.accountId)?.accountName || 'Select Account' : 
+                          'Select Account'
+                        }
+                      </button>
+                    </div>
+                  )}
                   
                   {/* Amount (simplified - one field) */}
                   <div className="col-span-2">
@@ -549,7 +553,7 @@ export default function TransactionList({
                 </div>
                 
                 {/* Desktop Grid Layout */}
-                <div className="hidden sm:grid grid-cols-16 gap-2 sm:gap-4 text-sm">
+                <div className={`hidden sm:grid gap-2 sm:gap-4 text-sm ${isAccountView ? 'grid-cols-14' : 'grid-cols-16'}`}>
                   {/* Selection Checkbox */}
                   <div className="col-span-1 flex justify-center">
                     <input
@@ -679,19 +683,28 @@ export default function TransactionList({
                         className="font-medium text-gray-900 truncate cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
                         onClick={() => handleStartEdit(transaction.id, 'description', transaction.description)}
                       >
-                        {transaction.description}
+                        {/* Show "Transfer To: [Account]" for credit card payments, otherwise show description */}
+                        {(transaction.budget?.category === 'Credit Card Payment' || 
+                          transaction.budget?.category === 'Credit Card Payments' ||
+                          (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card'))) ? (
+                          <span className="text-gray-600 italic">
+                            Transfer To: {transaction.account?.accountName || 'Credit Card'}
+                          </span>
+                        ) : (
+                          transaction.description
+                        )}
                       </div>
                     )}
                   </div>
                   
                   {/* Category Field */}
                   <div className="col-span-2 relative">
-                    {/* Check if this is a credit card payment - if so, show grayed out transfer */}
+                    {/* Check if this is a credit card payment - if so, show the credit card payment category */}
                     {(transaction.budget?.category === 'Credit Card Payment' || 
                       transaction.budget?.category === 'Credit Card Payments' ||
                       (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card'))) ? (
                       <div className="px-2 py-1 text-gray-400 italic text-sm truncate">
-                        Transfer To: {transaction.account?.accountName || 'Credit Card'}
+                        Credit Card Payments: {transaction.account?.accountName || 'Credit Card'}
                       </div>
                     ) : editingTransaction === transaction.id && editingField === 'category' ? (
                       <div className="relative">
@@ -751,31 +764,33 @@ export default function TransactionList({
                     )}
                   </div>
                   
-                  {/* Account Field */}
-                  <div className="col-span-2 text-gray-600 text-xs truncate">
-                    <div 
-                      className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setAccountFlyoutPosition({
-                          top: rect.bottom + 10,
-                          left: rect.left
-                        });
-                        setSelectedTransactionForAccount(transaction.id);
-                        setShowAccountFlyout(true);
-                        // Close other flyouts
-                        setShowCategoryFlyout(false);
-                        setShowNewTransactionCategoryFlyout(false);
-                        setShowNewTransactionAccountFlyout(false);
-                        setShowFlagPopover(false);
-                        setShowMovePopover(false);
-                        setShowIndividualFlagPopover(false);
-                      }}
-                    >
-                      {transaction.account.accountName}
+                  {/* Account Field - only show if not in account view */}
+                  {!isAccountView && (
+                    <div className="col-span-2 text-gray-600 text-xs truncate">
+                      <div 
+                        className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setAccountFlyoutPosition({
+                            top: rect.bottom + 10,
+                            left: rect.left
+                          });
+                          setSelectedTransactionForAccount(transaction.id);
+                          setShowAccountFlyout(true);
+                          // Close other flyouts
+                          setShowCategoryFlyout(false);
+                          setShowNewTransactionCategoryFlyout(false);
+                          setShowNewTransactionAccountFlyout(false);
+                          setShowFlagPopover(false);
+                          setShowMovePopover(false);
+                          setShowIndividualFlagPopover(false);
+                        }}
+                      >
+                        {transaction.account.accountName}
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
                   {/* Amount Fields - Outflow */}
                   <div className="col-span-1 text-right">

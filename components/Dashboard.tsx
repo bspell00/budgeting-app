@@ -2255,6 +2255,7 @@ const Dashboard = () => {
                       ) || []}
                       categoryGroups={dashboardData?.categories || []}
                       onCreateCategory={handleCreateCategory}
+                      isAccountView={true}
                     />
                   ) : (
                     <div className="p-8 text-center text-gray-500 bg-white border border-gray-200 rounded-lg">
