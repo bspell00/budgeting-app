@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Try raw SQL query as backup
     const rawBudgets = await prisma.$queryRaw`
-      SELECT COUNT(*) as count FROM Budget WHERE userId = ${userId}
+      SELECT COUNT(*) as count FROM "Budget" WHERE "userId" = ${userId}
     `;
     console.log('🔍 RAW SQL BUDGET COUNT:', rawBudgets);
 
