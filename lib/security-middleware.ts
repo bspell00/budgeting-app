@@ -136,16 +136,20 @@ function addSecurityHeaders(res: NextApiResponse) {
   // Strict transport security (HTTPS only)
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   
-  // Content Security Policy
-  res.setHeader('Content-Security-Policy', 
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.plaid.com; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; " +
-    "connect-src 'self' https://api.openai.com https://production.plaid.com https://development.plaid.com https://sandbox.plaid.com; " +
-    "frame-src https://cdn.plaid.com; " +
-    "object-src 'none';"
-  );
+  // Content Security Policy - relaxed for auth flows
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.plaid.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "connect-src 'self' https://api.openai.com https://production.plaid.com https://development.plaid.com https://sandbox.plaid.com",
+    "frame-src https://cdn.plaid.com",
+    "form-action 'self'",
+    "base-uri 'self'",
+    "object-src 'none'"
+  ].join('; ');
+  
+  res.setHeader('Content-Security-Policy', csp);
   
   // Referrer policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
