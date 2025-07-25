@@ -16,13 +16,15 @@ export function encrypt(text: string): string {
   try {
     // Generate a random IV for each encryption
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipher(ALGORITHM, ENCRYPTION_KEY);
+    // Derive a proper key from the encryption key
+    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
     
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
     
     // Get the authentication tag
-    const authTag = (cipher as any).getAuthTag();
+    const authTag = cipher.getAuthTag();
     
     // Combine IV, auth tag, and encrypted data
     const result = iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
@@ -51,8 +53,10 @@ export function decrypt(encryptedText: string): string {
     const authTag = Buffer.from(parts[1], 'hex');
     const encrypted = parts[2];
     
-    const decipher = crypto.createDecipher(ALGORITHM, ENCRYPTION_KEY);
-    (decipher as any).setAuthTag(authTag);
+    // Derive the same key used for encryption
+    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
     
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
