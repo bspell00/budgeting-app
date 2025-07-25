@@ -90,8 +90,16 @@ export default function SignUp() {
           {/* Welcome Card */}
           <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 p-8">
             <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-[#86b686] rounded-full flex items-center justify-center mx-auto mb-4">
-                <Brain className="w-8 h-8 text-white" />
+              <div className="w-16 h-16 mx-auto mb-4">
+                <Image 
+                  src="/img/PNG/icon.png" 
+                  alt="App Icon" 
+                  width={64} 
+                  height={64}
+                  className="w-full h-full object-contain"
+                  priority
+                  quality={100}
+                />
               </div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Join Our Community!</h1>
               <p className="text-gray-600">Create your account and start your financial journey with Finley</p>
