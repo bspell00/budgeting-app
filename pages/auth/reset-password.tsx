@@ -30,7 +30,7 @@ export default function ResetPassword() {
     if (password.length < 8) errors.push('At least 8 characters');
     if (!/(?=.*[a-z])/.test(password)) errors.push('One lowercase letter');
     if (!/(?=.*[A-Z])/.test(password)) errors.push('One uppercase letter');
-    if (!/(?=.*\\d)/.test(password)) errors.push('One number');
+    if (!/(?=.*\d)/.test(password)) errors.push('One number');
     if (!/(?=.*[@$!%*?&])/.test(password)) errors.push('One special character');
     return errors;
   };
@@ -207,7 +207,7 @@ export default function ResetPassword() {
                           { check: password.length >= 8, text: 'At least 8 characters' },
                           { check: /(?=.*[a-z])/.test(password), text: 'One lowercase letter' },
                           { check: /(?=.*[A-Z])/.test(password), text: 'One uppercase letter' },
-                          { check: /(?=.*\\d)/.test(password), text: 'One number' },
+                          { check: /(?=.*\d)/.test(password), text: 'One number' },
                           { check: /(?=.*[@$!%*?&])/.test(password), text: 'One special character' },
                         ].map((req, index) => (
                           <div key={index} className={`text-xs flex items-center space-x-1 ${req.check ? 'text-green-600' : 'text-gray-400'}`}>
