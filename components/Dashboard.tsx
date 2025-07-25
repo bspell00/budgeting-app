@@ -1764,7 +1764,7 @@ const Dashboard = () => {
                               <div className="flex items-center space-x-2">
                                 <div className="text-right">
                                   <p className={`font-bold text-sm ${
-                                    account.balance < 0 ? 'text-red-600' : 'text-green-600'
+                                    account.accountType === 'credit' || account.balance < 0 ? 'text-red-600' : 'text-green-600'
                                   }`}>
                                     {account.balance < 0 ? '-' : ''}
                                     {new Intl.NumberFormat('en-US', {
