@@ -21,7 +21,9 @@
       "Bash(npm install:*)",
       "Bash(curl:*)",
       "Bash(true)",
-      "Bash(heroku config:set:*)"
+      "Bash(heroku config:set:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }
