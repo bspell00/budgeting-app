@@ -43,15 +43,9 @@ export default function PayeeSelectionFlyout({
       acc.accountType === 'credit' && acc.id !== currentAccountId
     );
     
-    // Generate transfer options based on current account type
+    // Generate transfer options - always show as "Payment: [Credit Card Name]"
     return creditCards.map(creditCard => {
-      if (currentAccount.accountType === 'credit') {
-        // From credit card to other accounts - payment FROM credit card
-        return `Transfer From: ${creditCard.accountName}`;
-      } else {
-        // From checking/savings TO credit card - payment TO credit card
-        return `Transfer To: ${creditCard.accountName}`;
-      }
+      return `Payment: ${creditCard.accountName}`;
     });
   }, [accounts, currentAccountId]);
 
@@ -71,7 +65,7 @@ export default function PayeeSelectionFlyout({
     const regular: string[] = [];
     
     filteredPayees.forEach(payee => {
-      if (payee.startsWith('Transfer To:') || payee.startsWith('Transfer From:')) {
+      if (payee.startsWith('Payment:')) {
         transfers.push(payee);
       } else {
         regular.push(payee);
@@ -139,7 +133,7 @@ export default function PayeeSelectionFlyout({
               <div className="px-4 py-2 bg-found-divider/30">
                 <div className="flex items-center space-x-2">
                   <ArrowRightLeft className="w-4 h-4 text-found-primary" />
-                  <span className="text-sm font-medium text-found-text">Account Transfers</span>
+                  <span className="text-sm font-medium text-found-text">Credit Card Payments</span>
                 </div>
               </div>
               {groupedPayees.transfers.map((payee) => (

@@ -528,8 +528,14 @@ export default function TransactionList({
                     <span className="truncate ml-2">
                       {(transaction.budget?.category === 'Credit Card Payment' || 
                         transaction.budget?.category === 'Credit Card Payments' ||
-                        (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card'))) ? (
-                        <span className="text-gray-400 italic">Transfer To: {transaction.account?.accountName || 'Credit Card'}</span>
+                        (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card')) ||
+                        transaction.description?.startsWith('Payment:')) ? (
+                        <span className="text-gray-400 italic">
+                          {transaction.description?.startsWith('Payment:') 
+                            ? `Credit Card Payments: ${transaction.description.replace('Payment: ', '')}`
+                            : `Credit Card Payments: ${transaction.account?.accountName || 'Credit Card'}`
+                          }
+                        </span>
                       ) : (
                         transaction.category || 'Uncategorized'
                       )}
@@ -664,9 +670,13 @@ export default function TransactionList({
                     {/* Check if this is a credit card payment - if so, show the credit card payment category */}
                     {(transaction.budget?.category === 'Credit Card Payment' || 
                       transaction.budget?.category === 'Credit Card Payments' ||
-                      (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card'))) ? (
+                      (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card')) ||
+                      transaction.description?.startsWith('Payment:')) ? (
                       <div className="px-2 py-1 text-gray-400 italic text-sm truncate">
-                        Credit Card Payments: {transaction.account?.accountName || 'Credit Card'}
+                        {transaction.description?.startsWith('Payment:') 
+                          ? `Credit Card Payments: ${transaction.description.replace('Payment: ', '')}`
+                          : `Credit Card Payments: ${transaction.account?.accountName || 'Credit Card'}`
+                        }
                       </div>
                     ) : editingTransaction === transaction.id && editingField === 'category' ? (
                       <div className="relative">
@@ -1273,7 +1283,15 @@ export default function TransactionList({
         }}
         onSelectPayee={(payeeName) => {
           if (selectedTransactionForPayee && onUpdateTransaction) {
-            onUpdateTransaction(selectedTransactionForPayee, { description: payeeName });
+            const updates: { description: string; category?: string } = { description: payeeName };
+            
+            // If it's a credit card payment, automatically set the category
+            if (payeeName.startsWith('Payment:')) {
+              const creditCardName = payeeName.replace('Payment: ', '');
+              updates.category = `Credit Card Payments: ${creditCardName}`;
+            }
+            
+            onUpdateTransaction(selectedTransactionForPayee, updates);
           }
           setShowPayeeFlyout(false);
           setSelectedTransactionForPayee(null);
@@ -1298,7 +1316,17 @@ export default function TransactionList({
           setShowNewTransactionPayeeFlyout(false);
         }}
         onSelectPayee={(payeeName) => {
-          setNewTransaction(prev => ({ ...prev, description: payeeName }));
+          setNewTransaction(prev => {
+            const updates = { ...prev, description: payeeName };
+            
+            // If it's a credit card payment, automatically set the category
+            if (payeeName.startsWith('Payment:')) {
+              const creditCardName = payeeName.replace('Payment: ', '');
+              updates.category = `Credit Card Payments: ${creditCardName}`;
+            }
+            
+            return updates;
+          });
           setShowNewTransactionPayeeFlyout(false);
         }}
         existingPayees={uniquePayees}
