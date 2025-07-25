@@ -357,7 +357,7 @@ export default function TransactionList({
                   className="w-4 h-4 text-found-primary bg-found-surface border-found-divider rounded focus:ring-found-primary focus:ring-2"
                 />
               </div>
-              <div className="col-span-1 flex justify-center">🏳️</div>
+              <div className="col-span-1 flex justify-center text-xs">Flag</div>
               <div className="col-span-1 flex justify-center">✓</div>
               <div className="col-span-2">Date</div>
               <div className="col-span-3">Payee</div>
@@ -795,11 +795,11 @@ export default function TransactionList({
                         className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
                         onClick={() => handleStartEdit(transaction.id, 'amount', Math.abs(transaction.amount).toString())}
                       >
-                        {transaction.amount > 0 ? (
+                        {transaction.amount < 0 ? (
                           <span className="text-gray-400">-</span>
                         ) : (
                           <span className="font-medium text-red-600">
-                            {formatCurrency(Math.abs(transaction.amount))}
+                            {formatCurrency(transaction.amount)}
                           </span>
                         )}
                       </div>
@@ -815,11 +815,11 @@ export default function TransactionList({
                         className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
                         onClick={() => handleStartEdit(transaction.id, 'amount', transaction.amount.toString())}
                       >
-                        {transaction.amount < 0 ? (
+                        {transaction.amount > 0 ? (
                           <span className="text-gray-400">-</span>
                         ) : (
                           <span className="font-medium text-green-600">
-                            {formatCurrency(transaction.amount)}
+                            {formatCurrency(Math.abs(transaction.amount))}
                           </span>
                         )}
                       </div>
