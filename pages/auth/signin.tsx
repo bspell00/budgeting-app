@@ -183,9 +183,12 @@ export default function SignIn() {
               </p>
               <p className="text-xs text-gray-500 mt-4">
                 Forgot your password?{' '}
-                <button className="text-[#86b686] hover:text-[#73a373] transition-colors">
+                <Link 
+                  href="/auth/forgot-password"
+                  className="text-[#86b686] hover:text-[#73a373] transition-colors"
+                >
                   Reset it here
-                </button>
+                </Link>
               </p>
             </div>
           </div>
