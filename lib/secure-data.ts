@@ -124,7 +124,7 @@ export class SecureUserService {
       await tx.transaction.deleteMany({ where: { userId } });
       await tx.budget.deleteMany({ where: { userId } });
       await tx.goal.deleteMany({ where: { userId } });
-      await tx.aiPlan.deleteMany({ where: { userId } });
+      await tx.aIPlan.deleteMany({ where: { userId } });
       await tx.account.deleteMany({ where: { userId } });
       await tx.user.delete({ where: { id: userId } });
     });
