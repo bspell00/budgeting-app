@@ -1,11 +1,11 @@
-# Zero-Based Budgeting App
+# AI-Powered Budgeting App
 
-A modern, AI-powered budgeting application with Plaid integration for automatic transaction syncing and intelligent goal setting.
+A modern, YNAB-style budgeting application with Plaid integration for automatic transaction syncing and Finley AI assistant for intelligent financial guidance.
 
 ## Features
 
 - 🏦 **Plaid Integration**: Automatic bank account syncing and transaction categorization
-- 🤖 **AI-Powered Insights**: Smart budget suggestions and goal recommendations
+- 🧠 **Finley AI Assistant**: Intelligent budget suggestions, spending insights, and personalized financial advice
 - 💰 **Zero-Based Budgeting**: Assign every dollar a purpose before spending
 - 🎯 **Debt Payoff Goals**: Automated debt snowball and avalanche calculations
 - 📊 **Beautiful Dashboard**: Clean, modern interface inspired by YNAB
@@ -15,8 +15,8 @@ A modern, AI-powered budgeting application with Plaid integration for automatic 
 
 1. **Clone and Install**
    ```bash
-   git clone 
-   cd zero-based-budgeting-app
+   git clone https://github.com/bspell00/budgeting-app.git
+   cd budgeting-app
    npm install
    ```
 
