@@ -183,11 +183,13 @@ function checkRateLimit(
   const windowStart = now - config.windowMs;
   
   // Clean up old entries
-  for (const [k, v] of rateLimitMap.entries()) {
+  const entriesToDelete: string[] = [];
+  rateLimitMap.forEach((v, k) => {
     if (v.resetTime < now) {
-      rateLimitMap.delete(k);
+      entriesToDelete.push(k);
     }
-  }
+  });
+  entriesToDelete.forEach(k => rateLimitMap.delete(k));
   
   const current = rateLimitMap.get(key);
   
