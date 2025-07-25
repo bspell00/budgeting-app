@@ -52,11 +52,13 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
         // After adjustment, close the account (skip balance check since we just adjusted it)
         await handleCloseAccountWithSkip();
       } else {
-        throw new Error('Failed to create adjustment transaction');
+        const errorData = await response.json();
+        console.error('Transaction creation failed:', errorData);
+        throw new Error(`Failed to create adjustment transaction: ${errorData.error || response.statusText}`);
       }
     } catch (error) {
       console.error('Error creating adjustment:', error);
-      alert('Failed to create balance adjustment. Please try again.');
+      alert(`Failed to create balance adjustment: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
     } finally {
       setLoading(false);
     }
@@ -80,12 +82,13 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
           // Account still has balance, show error
           alert(error.message || 'Account must have $0 balance before closing.');
         } else {
-          throw new Error('Failed to close account');
+          console.error('Account closure failed:', error);
+          throw new Error(`Failed to close account: ${error.error || 'Unknown error'}`);
         }
       }
     } catch (error) {
       console.error('Error closing account:', error);
-      alert('Failed to close account. Please try again.');
+      alert(`Failed to close account: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
     } finally {
       setLoading(false);
     }
