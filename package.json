@@ -43,6 +43,7 @@
     "typescript": "5.6.3"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "eslint": "8.57.1",
     "eslint-config-next": "14.2.18",
     "prisma": "^6.12.0"
