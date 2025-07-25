@@ -1,2 +1,2 @@
 web: npm start
-release: npx prisma migrate deploy
+release: node scripts/deploy.js && npx prisma db push

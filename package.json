@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "description": "AI-powered zero-based budgeting app with Plaid integration",
   "scripts": {
-    "dev": "next dev -p 3001",
-    "build": "prisma generate && next build",
+    "dev": "node scripts/deploy.js && next dev -p 3001",
+    "build": "node scripts/deploy.js && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "postinstall": "prisma generate"
+    "postinstall": "node scripts/deploy.js",
+    "db:dev": "cp prisma/schema.dev.prisma prisma/schema.prisma && npx prisma generate",
+    "db:prod": "cp prisma/schema.prod.prisma prisma/schema.prisma && npx prisma generate"
   },
   "engines": {
     "node": ">=18.0.0",
