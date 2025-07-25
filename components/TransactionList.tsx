@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, PlusCircle, ArrowUpDown, Clock, CheckCircle, Check, X, Flag, Move, MoreHorizontal } from 'lucide-react';
 import CategorySelectionFlyout from './CategorySelectionFlyout';
 import AccountSelectionFlyout from './AccountSelectionFlyout';
+import PayeeSelectionFlyout from './PayeeSelectionFlyout';
 
 interface Transaction {
   id: string;
@@ -91,14 +92,12 @@ export default function TransactionList({
     amount: '',
     accountId: accounts[0]?.id || ''
   });
-  const [filteredPayees, setFilteredPayees] = useState<string[]>([]);
   
   // Inline editing state
   const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
   const [editFilteredCategories, setEditFilteredCategories] = useState<string[]>([]);
-  const [editFilteredPayees, setEditFilteredPayees] = useState<string[]>([]);
   
   // Selection state
   const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
@@ -132,25 +131,21 @@ export default function TransactionList({
   const [selectedTransactionForAccount, setSelectedTransactionForAccount] = useState<string | null>(null);
   const [accountFlyoutPosition, setAccountFlyoutPosition] = useState({ top: 0, left: 0 });
   
+  // Payee selection flyout state
+  const [showPayeeFlyout, setShowPayeeFlyout] = useState(false);
+  const [selectedTransactionForPayee, setSelectedTransactionForPayee] = useState<string | null>(null);
+  const [payeeFlyoutPosition, setPayeeFlyoutPosition] = useState({ top: 0, left: 0 });
+  
+  // New transaction payee flyout state
+  const [showNewTransactionPayeeFlyout, setShowNewTransactionPayeeFlyout] = useState(false);
+  const [newTransactionPayeeFlyoutPosition, setNewTransactionPayeeFlyoutPosition] = useState({ top: 0, left: 0 });
+  
   // Get unique payees from existing transactions
   const uniquePayees = React.useMemo(() => 
     Array.from(new Set(transactions.map(t => t.description).filter(Boolean))), 
     [transactions]
   );
   
-  // Filter payees based on input
-  
-  useEffect(() => {
-    if (newTransaction.description) {
-      setFilteredPayees(
-        uniquePayees.filter(payee => 
-          payee.toLowerCase().includes(newTransaction.description.toLowerCase())
-        ).slice(0, 5)
-      );
-    } else {
-      setFilteredPayees([]);
-    }
-  }, [newTransaction.description, uniquePayees]);
 
 
   // Filter categories and payees for editing
@@ -166,17 +161,6 @@ export default function TransactionList({
     }
   }, [editValue, categories, editingField]);
   
-  useEffect(() => {
-    if (editingField === 'description' && editValue) {
-      setEditFilteredPayees(
-        uniquePayees.filter(payee => 
-          payee.toLowerCase().includes(editValue.toLowerCase())
-        ).slice(0, 5)
-      );
-    } else {
-      setEditFilteredPayees([]);
-    }
-  }, [editValue, uniquePayees, editingField]);
 
   // Use transactions as-is (no demo flags - empty flags that can be clicked)
   const transactionsWithDemoFlags = transactions;
@@ -291,7 +275,6 @@ export default function TransactionList({
     setEditingField(null);
     setEditValue('');
     setEditFilteredCategories([]);
-    setEditFilteredPayees([]);
   };
 
   const handleSaveEdit = () => {
@@ -396,26 +379,28 @@ export default function TransactionList({
                   
                   {/* Payee */}
                   <div className="col-span-3 relative">
-                    <input
-                      type="text"
-                      placeholder="Payee"
-                      value={newTransaction.description}
-                      onChange={(e) => setNewTransaction(prev => ({ ...prev, description: e.target.value }))}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {filteredPayees.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-32 overflow-y-auto">
-                        {filteredPayees.map((payee, index) => (
-                          <div
-                            key={index}
-                            onClick={() => setNewTransaction(prev => ({ ...prev, description: payee }))}
-                            className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm"
-                          >
-                            {payee}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setNewTransactionPayeeFlyoutPosition({
+                          top: rect.bottom + 10,
+                          left: rect.left
+                        });
+                        setShowNewTransactionPayeeFlyout(true);
+                        // Close other flyouts
+                        setShowNewTransactionCategoryFlyout(false);
+                        setShowNewTransactionAccountFlyout(false);
+                      }}
+                      className={`w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-left ${
+                        !newTransaction.description || newTransaction.description.trim() === '' 
+                          ? 'text-gray-400' 
+                          : 'text-gray-700'
+                      }`}
+                    >
+                      {newTransaction.description && newTransaction.description.trim() !== '' ? newTransaction.description : 'Payee'}
+                    </button>
                   </div>
                   
                   {/* Category */}
@@ -650,51 +635,28 @@ export default function TransactionList({
                   
                   {/* Payee/Description Field */}
                   <div className="col-span-3 relative">
-                    {editingTransaction === transaction.id && editingField === 'description' ? (
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={handleKeyDown}
-                          onBlur={handleSaveEdit}
-                          className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          autoFocus
-                        />
-                        {editFilteredPayees.length > 0 && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-32 overflow-y-auto">
-                            {editFilteredPayees.map((payee, index) => (
-                              <div
-                                key={index}
-                                onClick={() => {
-                                  setEditValue(payee);
-                                  handleSaveEdit();
-                                }}
-                                className="px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm"
-                              >
-                                {payee}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div 
-                        className="font-medium text-gray-900 truncate cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
-                        onClick={() => handleStartEdit(transaction.id, 'description', transaction.description)}
-                      >
-                        {/* Show "Transfer To: [Account]" for credit card payments, otherwise show description */}
-                        {(transaction.budget?.category === 'Credit Card Payment' || 
-                          transaction.budget?.category === 'Credit Card Payments' ||
-                          (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card'))) ? (
-                          <span className="text-gray-600 italic">
-                            Transfer To: {transaction.account?.accountName || 'Credit Card'}
-                          </span>
-                        ) : (
-                          transaction.description
-                        )}
-                      </div>
-                    )}
+                    <div 
+                      className="font-medium text-gray-900 truncate cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setPayeeFlyoutPosition({
+                          top: rect.bottom + 10,
+                          left: rect.left
+                        });
+                        setSelectedTransactionForPayee(transaction.id);
+                        setShowPayeeFlyout(true);
+                        // Close other flyouts
+                        setShowCategoryFlyout(false);
+                        setShowNewTransactionCategoryFlyout(false);
+                        setShowNewTransactionAccountFlyout(false);
+                        setShowNewTransactionPayeeFlyout(false);
+                        setShowAccountFlyout(false);
+                      }}
+                    >
+                      {/* Show payee or transfer description */}
+                      {transaction.description}
+                    </div>
                   </div>
                   
                   {/* Category Field */}
@@ -1300,6 +1262,50 @@ export default function TransactionList({
           undefined
         }
         position={accountFlyoutPosition}
+      />
+      
+      {/* Payee Selection Flyout - for existing transactions */}
+      <PayeeSelectionFlyout
+        isOpen={showPayeeFlyout}
+        onClose={() => {
+          setShowPayeeFlyout(false);
+          setSelectedTransactionForPayee(null);
+        }}
+        onSelectPayee={(payeeName) => {
+          if (selectedTransactionForPayee && onUpdateTransaction) {
+            onUpdateTransaction(selectedTransactionForPayee, { description: payeeName });
+          }
+          setShowPayeeFlyout(false);
+          setSelectedTransactionForPayee(null);
+        }}
+        existingPayees={uniquePayees}
+        accounts={accounts}
+        currentPayee={selectedTransactionForPayee ? 
+          transactions.find(t => t.id === selectedTransactionForPayee)?.description : 
+          undefined
+        }
+        position={payeeFlyoutPosition}
+        currentAccountId={selectedTransactionForPayee ? 
+          transactions.find(t => t.id === selectedTransactionForPayee)?.account?.id : 
+          undefined
+        }
+      />
+      
+      {/* New Transaction Payee Selection Flyout */}
+      <PayeeSelectionFlyout
+        isOpen={showNewTransactionPayeeFlyout}
+        onClose={() => {
+          setShowNewTransactionPayeeFlyout(false);
+        }}
+        onSelectPayee={(payeeName) => {
+          setNewTransaction(prev => ({ ...prev, description: payeeName }));
+          setShowNewTransactionPayeeFlyout(false);
+        }}
+        existingPayees={uniquePayees}
+        accounts={accounts}
+        currentPayee={newTransaction.description}
+        position={newTransactionPayeeFlyoutPosition}
+        currentAccountId={newTransaction.accountId}
       />
     </div>
   );
