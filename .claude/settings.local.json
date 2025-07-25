@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma generate:*)",
+      "Bash(mkdir:*)",
+      "WebFetch(domain:openbankproject.docs.apiary.io)",
+      "Bash(find:*)",
+      "Bash(npm run build:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(node:*)",
+      "Bash(npm run dev:*)",
+      "Bash(pkill:*)",
+      "Bash(sed:*)",
+      "Bash(npx tsc:*)",
+      "Bash(grep:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(curl:*)",
+      "Bash(true)",
+      "Bash(heroku config:set:*)"
+    ],
+    "deny": []
+  }
+}
