@@ -4,6 +4,7 @@ import { authOptions } from '../../../lib/auth';
 import { PlaidApi, Configuration, PlaidEnvironments, TransactionsGetRequest, AccountsGetRequest } from 'plaid';
 import { PrismaClient } from '@prisma/client';
 import CreditCardAutomation from '../../../lib/credit-card-automation';
+import { SecureAccountService, SecurityAuditService, SecureTransactionService } from '../../../lib/secure-data';
 
 const prisma = new PrismaClient();
 
@@ -35,7 +36,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Get all user accounts with access tokens
+    // Log sync operation for security audit
+    await SecurityAuditService.logSecurityEvent({
+      userId,
+      action: 'SYNC_ACCOUNTS',
+      resource: 'plaid_data',
+      success: true,
+      details: 'User initiated account sync',
+    });
+
+    // Get all user accounts (tokens remain encrypted)
     const accounts = await prisma.account.findMany({
       where: {
         userId: userId,

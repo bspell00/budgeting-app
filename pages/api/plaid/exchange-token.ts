@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
 import { PrismaClient } from '@prisma/client';
 import CreditCardAutomation from '../../../lib/credit-card-automation';
+import { SecureAccountService, SecurityAuditService } from '../../../lib/secure-data';
 
 const prisma = new PrismaClient();
 
@@ -76,20 +77,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const accountsData = await accountsResponse.json();
 
-    // Store accounts in database
+    // Store accounts in database with encrypted tokens
     const accounts = await Promise.all(
       accountsData.accounts.map(async (account: any) => {
-        return await prisma.account.create({
-          data: {
-            userId: userId,
-            plaidAccountId: account.account_id,
-            plaidAccessToken: accessToken,
-            accountName: account.name,
-            accountType: account.type,
-            accountSubtype: account.subtype || '',
-            balance: account.balances.current || 0,
-            availableBalance: account.balances.available,
-          },
+        // Log account creation for security audit
+        await SecurityAuditService.logSecurityEvent({
+          userId,
+          action: 'CREATE_ACCOUNT',
+          resource: 'plaid_account',
+          success: true,
+          details: `Created account: ${account.name} (${account.type})`,
+        });
+
+        return await SecureAccountService.createAccount({
+          userId: userId,
+          plaidAccountId: account.account_id,
+          plaidAccessToken: accessToken, // This will be encrypted automatically
+          accountName: account.name,
+          accountType: account.type,
+          accountSubtype: account.subtype || '',
+          balance: account.balances.current || 0,
+          availableBalance: account.balances.available,
         });
       })
     );

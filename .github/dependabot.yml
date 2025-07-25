@@ -1,0 +1,47 @@
+version: 2
+updates:
+  # Enable version updates for npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "bspell00"
+    assignees:
+      - "bspell00"
+    commit-message:
+      prefix: "security"
+      include: "scope"
+    labels:
+      - "security"
+      - "dependencies"
+    # Group updates to reduce PR noise
+    groups:
+      production-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "next"
+          - "react*"
+          - "@prisma/*"
+          - "plaid"
+          - "next-auth"
+        update-types:
+          - "minor"
+          - "patch"
+      security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # Enable security updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/.github/workflows"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "bspell00"
+    assignees:
+      - "bspell00"
