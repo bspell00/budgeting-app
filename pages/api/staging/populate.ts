@@ -19,11 +19,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       if (!user) {
+        // Create test user with password "test123"
+        const bcrypt = require('bcryptjs');
+        const hashedPassword = await bcrypt.hash('test123', 12);
+        
         user = await prisma.user.create({
           data: {
             email: 'test@staging.com',
             name: 'Test User',
-            password: '$2a$12$dummy.hash.for.staging.user.only'
+            password: hashedPassword
           }
         });
       }
