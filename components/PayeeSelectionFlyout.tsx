@@ -43,9 +43,13 @@ export default function PayeeSelectionFlyout({
       acc.accountType === 'credit' && acc.id !== currentAccountId
     );
     
-    // Generate transfer options - always show as "Payment: [Credit Card Name]"
+    // Generate transfer options - use "Payment To:" format for cash accounts
     return creditCards.map(creditCard => {
-      return `Payment: ${creditCard.accountName}`;
+      if (currentAccount.accountType === 'depository' || currentAccount.accountType === 'checking' || currentAccount.accountType === 'savings') {
+        return `Payment To: ${creditCard.accountName}`;
+      } else {
+        return `Payment: ${creditCard.accountName}`;
+      }
     });
   }, [accounts, currentAccountId]);
 
@@ -65,7 +69,7 @@ export default function PayeeSelectionFlyout({
     const regular: string[] = [];
     
     filteredPayees.forEach(payee => {
-      if (payee.startsWith('Payment:')) {
+      if (payee.startsWith('Payment:') || payee.startsWith('Payment To:')) {
         transfers.push(payee);
       } else {
         regular.push(payee);

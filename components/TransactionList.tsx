@@ -529,10 +529,10 @@ export default function TransactionList({
                       {(transaction.budget?.category === 'Credit Card Payment' || 
                         transaction.budget?.category === 'Credit Card Payments' ||
                         (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card')) ||
-                        transaction.description?.startsWith('Payment:')) ? (
+                        transaction.description?.startsWith('Payment:') || transaction.description?.startsWith('Payment To:')) ? (
                         <span className="text-gray-400 italic">
-                          {transaction.description?.startsWith('Payment:') 
-                            ? `Credit Card Payments: ${transaction.description.replace('Payment: ', '')}`
+                          {(transaction.description?.startsWith('Payment:') || transaction.description?.startsWith('Payment To:')) 
+                            ? `Credit Card Payments: ${transaction.description.replace(/Payment(?:\s+To)?:\s*/, '')}`
                             : `Credit Card Payments: ${transaction.account?.accountName || 'Credit Card'}`
                           }
                         </span>
@@ -671,10 +671,10 @@ export default function TransactionList({
                     {(transaction.budget?.category === 'Credit Card Payment' || 
                       transaction.budget?.category === 'Credit Card Payments' ||
                       (transaction.budget?.name?.includes('Payment') && transaction.budget?.name?.includes('Card')) ||
-                      transaction.description?.startsWith('Payment:')) ? (
+                      transaction.description?.startsWith('Payment:') || transaction.description?.startsWith('Payment To:')) ? (
                       <div className="px-2 py-1 text-gray-400 italic text-sm truncate">
-                        {transaction.description?.startsWith('Payment:') 
-                          ? `Credit Card Payments: ${transaction.description.replace('Payment: ', '')}`
+                        {(transaction.description?.startsWith('Payment:') || transaction.description?.startsWith('Payment To:')) 
+                          ? `Credit Card Payments: ${transaction.description.replace(/Payment(?:\s+To)?:\s*/, '')}`
                           : `Credit Card Payments: ${transaction.account?.accountName || 'Credit Card'}`
                         }
                       </div>
@@ -1295,8 +1295,8 @@ export default function TransactionList({
             const updates: { description: string; category?: string } = { description: payeeName };
             
             // If it's a credit card payment, automatically set the category
-            if (payeeName.startsWith('Payment:')) {
-              const creditCardName = payeeName.replace('Payment: ', '');
+            if (payeeName.startsWith('Payment:') || payeeName.startsWith('Payment To:')) {
+              const creditCardName = payeeName.replace(/Payment(?:\s+To)?:\s*/, '');
               updates.category = `Credit Card Payments: ${creditCardName}`;
             }
             
@@ -1329,8 +1329,8 @@ export default function TransactionList({
             const updates = { ...prev, description: payeeName };
             
             // If it's a credit card payment, automatically set the category
-            if (payeeName.startsWith('Payment:')) {
-              const creditCardName = payeeName.replace('Payment: ', '');
+            if (payeeName.startsWith('Payment:') || payeeName.startsWith('Payment To:')) {
+              const creditCardName = payeeName.replace(/Payment(?:\s+To)?:\s*/, '');
               updates.category = `Credit Card Payments: ${creditCardName}`;
             }
             

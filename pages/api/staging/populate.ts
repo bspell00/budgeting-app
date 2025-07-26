@@ -178,7 +178,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           accountId: checkingAccount!.id,
           budgetId: chaseBudget?.id,
           plaidTransactionId: 'demo_payment_out_001',
-          amount: -200.00,
+          amount: -200.00, // Negative for cash account (outflow)
           description: 'Payment To: Chase Sapphire Reserve',
           category: 'Credit Card Payments: Chase Sapphire Reserve',
           date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
@@ -191,7 +191,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           accountId: chaseCard!.id,
           budgetId: null,
           plaidTransactionId: 'demo_payment_in_001',
-          amount: 200.00,
+          amount: 200.00, // Positive for credit card (reduces debt)
           description: 'Payment From: Primary Checking',
           category: 'Credit Card Payment',
           date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
