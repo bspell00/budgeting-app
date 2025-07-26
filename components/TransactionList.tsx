@@ -780,14 +780,14 @@ export default function TransactionList({
                     ) : (
                       <div 
                         className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
-                        onClick={() => handleStartEdit(transaction.id, 'amount', Math.abs(transaction.amount).toString())}
+                        onClick={() => handleStartEdit(transaction.id, 'amount', transaction.amount.toString())}
                       >
                         {transaction.amount < 0 ? (
-                          <span className="text-gray-400">-</span>
-                        ) : (
                           <span className="font-medium text-red-600">
-                            {formatCurrency(transaction.amount)}
+                            {formatCurrency(Math.abs(transaction.amount))}
                           </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
                         )}
                       </div>
                     )}
@@ -796,18 +796,27 @@ export default function TransactionList({
                   {/* Amount Fields - Inflow */}
                   <div className="col-span-1 text-right">
                     {editingTransaction === transaction.id && editingField === 'amount' ? (
-                      <div className="text-gray-400">-</div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleSaveEdit}
+                        className="w-full px-2 py-1 border border-blue-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoFocus
+                      />
                     ) : (
                       <div 
                         className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
                         onClick={() => handleStartEdit(transaction.id, 'amount', transaction.amount.toString())}
                       >
                         {transaction.amount > 0 ? (
-                          <span className="text-gray-400">-</span>
-                        ) : (
                           <span className="font-medium text-green-600">
-                            {formatCurrency(Math.abs(transaction.amount))}
+                            {formatCurrency(transaction.amount)}
                           </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
                         )}
                       </div>
                     )}
