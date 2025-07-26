@@ -14,19 +14,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log('🚀 Populating staging database with test data...');
 
       // Get or create a test user
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash('test123', 12);
+      
       let user = await prisma.user.findFirst({
         where: { email: 'test@staging.com' }
       });
 
       if (!user) {
         // Create test user with password "test123"
-        const bcrypt = require('bcryptjs');
-        const hashedPassword = await bcrypt.hash('test123', 12);
-        
         user = await prisma.user.create({
           data: {
             email: 'test@staging.com',
             name: 'Test User',
+            password: hashedPassword
+          }
+        });
+      } else {
+        // Update existing user with proper password hash
+        user = await prisma.user.update({
+          where: { email: 'test@staging.com' },
+          data: {
             password: hashedPassword
           }
         });
