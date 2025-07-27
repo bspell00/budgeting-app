@@ -54,6 +54,31 @@ const Dashboard = () => {
   const { data: session } = useSession();
   const router = useRouter();
   
+  // Local UI state (declare before SWR hooks that depend on them)
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
+  const [leftSidebarTab, setLeftSidebarTab] = useState('budget');
+  const [activeDragItem, setActiveDragItem] = useState<any>(null);
+  const [selectedAccount, setSelectedAccount] = useState<any>(null);
+  const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [categoryInput, setCategoryInput] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showProgressBars, setShowProgressBars] = useState(false);
+  const [showMoveMoneyPopover, setShowMoveMoneyPopover] = useState(false);
+  const [moveMoneySource, setMoveMoneySource] = useState<any>(null);
+  const [moveMoneyPosition, setMoveMoneyPosition] = useState({ top: 0, left: 0 });
+  const [showAssignMoneyPopover, setShowAssignMoneyPopover] = useState(false);
+  const [assignMoneyPosition, setAssignMoneyPosition] = useState({ top: 0, left: 0 });
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showAccountTypeModal, setShowAccountTypeModal] = useState(false);
+  const [showAccountClosureModal, setShowAccountClosureModal] = useState(false);
+  const [accountToClose, setAccountToClose] = useState<any>(null);
+  const [transactionFilter, setTransactionFilter] = useState<'all' | 'unapproved' | 'uncategorized'>('all');
+  
   // SWR hooks for real-time data
   const { 
     data: dashboardData, 
@@ -86,31 +111,6 @@ const Dashboard = () => {
   const accounts = accountsData || [];
   const loading = dashboardLoading || accountsLoading;
   const error = dashboardError || accountsError || transactionsError;
-  
-  // Local UI state
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [showGoalModal, setShowGoalModal] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
-  const [leftSidebarTab, setLeftSidebarTab] = useState('budget');
-  const [activeDragItem, setActiveDragItem] = useState<any>(null);
-  const [selectedAccount, setSelectedAccount] = useState<any>(null);
-  const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
-  const [editingTransaction, setEditingTransaction] = useState(null);
-  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
-  const [categoryInput, setCategoryInput] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [showProgressBars, setShowProgressBars] = useState(false);
-  const [showMoveMoneyPopover, setShowMoveMoneyPopover] = useState(false);
-  const [moveMoneySource, setMoveMoneySource] = useState<any>(null);
-  const [moveMoneyPosition, setMoveMoneyPosition] = useState({ top: 0, left: 0 });
-  const [showAssignMoneyPopover, setShowAssignMoneyPopover] = useState(false);
-  const [assignMoneyPosition, setAssignMoneyPosition] = useState({ top: 0, left: 0 });
-  const [showAccountModal, setShowAccountModal] = useState(false);
-  const [showAccountTypeModal, setShowAccountTypeModal] = useState(false);
-  const [showAccountClosureModal, setShowAccountClosureModal] = useState(false);
-  const [accountToClose, setAccountToClose] = useState<any>(null);
-  const [transactionFilter, setTransactionFilter] = useState<'all' | 'unapproved' | 'uncategorized'>('all');
 
   // Detection logic for transaction alerts
   const unapprovedTransactions = React.useMemo(() => {
