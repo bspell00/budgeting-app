@@ -52,19 +52,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Get user's current financial data for context
+    // Get user's comprehensive financial data for analysis
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
+    const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
 
-    const [budgets, accounts, transactions, goals] = await Promise.all([
+    const [budgets, lastMonthBudgets, accounts, currentTransactions, allTransactions, goals] = await Promise.all([
+      // Current month budgets
       prisma.budget.findMany({
         where: { userId, month: currentMonth, year: currentYear },
         orderBy: [{ category: 'asc' }, { name: 'asc' }]
       }),
+      // Last month budgets for comparison
+      prisma.budget.findMany({
+        where: { userId, month: lastMonth, year: lastMonthYear },
+        orderBy: [{ category: 'asc' }, { name: 'asc' }]
+      }),
+      // All accounts
       prisma.account.findMany({
         where: { userId },
         orderBy: { accountName: 'asc' }
       }),
+      // Current month transactions
       prisma.transaction.findMany({
         where: {
           userId,
@@ -75,27 +85,97 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         include: { account: true },
         orderBy: { date: 'desc' },
-        take: 50 // Recent transactions for context
       }),
+      // Last 3 months of transactions for trend analysis
+      prisma.transaction.findMany({
+        where: {
+          userId,
+          date: {
+            gte: new Date(currentYear, currentMonth - 4, 1), // Last 3 months
+            lt: new Date(currentYear, currentMonth, 1),
+          },
+        },
+        include: { account: true },
+        orderBy: { date: 'desc' },
+      }),
+      // Goals
       prisma.goal.findMany({
         where: { userId },
         orderBy: { name: 'asc' }
       })
     ]);
 
-    // Calculate summary data
+    // Calculate comprehensive financial analysis
     const totalBudgeted = budgets.reduce((sum, b) => sum + b.amount, 0);
     const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
     const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
     const toBeAssigned = totalBalance - totalBudgeted;
+    
+    // Calculate last month comparison
+    const lastMonthBudgeted = lastMonthBudgets.reduce((sum, b) => sum + b.amount, 0);
+    const lastMonthSpent = lastMonthBudgets.reduce((sum, b) => sum + b.spent, 0);
+    
+    // Spending analysis by category
+    const spendingByCategory = budgets.reduce((acc, budget) => {
+      const category = budget.category || 'Other';
+      if (!acc[category]) {
+        acc[category] = { budgeted: 0, spent: 0, available: 0 };
+      }
+      acc[category].budgeted += budget.amount;
+      acc[category].spent += budget.spent;
+      acc[category].available += (budget.amount - budget.spent);
+      return acc;
+    }, {} as Record<string, any>);
+    
+    // Account type analysis
+    const cashAccounts = accounts.filter(a => a.accountType === 'depository');
+    const creditAccounts = accounts.filter(a => a.accountType === 'credit');
+    const totalCash = cashAccounts.reduce((sum, a) => sum + a.balance, 0);
+    const totalDebt = creditAccounts.reduce((sum, a) => sum + Math.abs(a.balance), 0);
+    
+    // Transaction insights
+    const largestTransactions = currentTransactions
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      .slice(0, 5);
+    
+    // Overspending analysis
+    const overspentBudgets = budgets.filter(b => b.available < 0);
+    const totalOverspent = overspentBudgets.reduce((sum, b) => sum + Math.abs(b.available), 0);
+    
+    // Savings rate calculation
+    const monthlyIncome = currentTransactions
+      .filter(t => t.amount > 0 && t.category !== 'Transfer')
+      .reduce((sum, t) => sum + t.amount, 0);
+    const monthlySavings = totalBudgeted - totalSpent;
+    const savingsRate = monthlyIncome > 0 ? (monthlySavings / monthlyIncome) * 100 : 0;
 
     // Generate AI response using OpenAI
     const aiResponse = await generateOpenAIResponse(message, {
       budgets,
+      lastMonthBudgets,
       accounts,
-      transactions,
+      transactions: currentTransactions,
+      allTransactions,
       goals,
-      summary: { totalBudgeted, totalSpent, totalBalance, toBeAssigned },
+      summary: { 
+        totalBudgeted, 
+        totalSpent, 
+        totalBalance, 
+        toBeAssigned,
+        lastMonthBudgeted,
+        lastMonthSpent,
+        totalCash,
+        totalDebt,
+        savingsRate,
+        monthlyIncome,
+        monthlySavings
+      },
+      analysis: {
+        spendingByCategory,
+        overspentBudgets,
+        totalOverspent,
+        largestTransactions
+      },
       history
     });
 
@@ -125,7 +205,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 }
 
 async function generateOpenAIResponse(message: string, context: any) {
-  const { budgets, accounts, transactions, goals, summary, history } = context;
+  const { budgets, lastMonthBudgets, accounts, transactions, allTransactions, goals, summary, analysis, history } = context;
 
   // Check if OpenAI API key is available
   if (!hasOpenAIKey) {
@@ -145,25 +225,61 @@ async function generateOpenAIResponse(message: string, context: any) {
     return handleSpendingAnalysisIntent(budgets, transactions);
   }
 
-  // Create financial context for OpenAI
+  // Create comprehensive financial context for OpenAI
   const financialContext = `
-FINANCIAL DATA:
-- Total Balance: $${summary.totalBalance.toFixed(2)}
-- Total Budgeted: $${summary.totalBudgeted.toFixed(2)}
-- Total Spent: $${summary.totalSpent.toFixed(2)}
+FINANCIAL OVERVIEW:
+- Total Net Worth: $${(summary.totalCash - summary.totalDebt).toFixed(2)}
+- Cash Available: $${summary.totalCash.toFixed(2)}
+- Total Debt: $${summary.totalDebt.toFixed(2)}
+- Monthly Savings Rate: ${summary.savingsRate.toFixed(1)}%
 - To Be Assigned: $${summary.toBeAssigned.toFixed(2)}
 
-BUDGETS (${budgets.length}):
-${budgets.slice(0, 5).map((b: any) => `- ${b.name}: Budgeted $${b.amount}, Spent $${b.spent}, Available $${(b.amount - b.spent).toFixed(2)}`).join('\n')}
+THIS MONTH'S BUDGET PERFORMANCE:
+- Budgeted: $${summary.totalBudgeted.toFixed(2)}
+- Spent: $${summary.totalSpent.toFixed(2)} (${summary.totalBudgeted > 0 ? ((summary.totalSpent / summary.totalBudgeted) * 100).toFixed(1) : 0}%)
+- Remaining: $${(summary.totalBudgeted - summary.totalSpent).toFixed(2)}
+${analysis.overspentBudgets.length > 0 ? `- OVERSPENT: ${analysis.overspentBudgets.length} categories, $${analysis.totalOverspent.toFixed(2)} total` : '- No overspending ✅'}
 
-ACCOUNTS (${accounts.length}):
-${accounts.slice(0, 3).map((a: any) => `- ${a.accountName}: $${a.balance.toFixed(2)}`).join('\n')}
+MONTH-OVER-MONTH COMPARISON:
+- Spending Change: ${summary.lastMonthSpent > 0 ? ((summary.totalSpent - summary.lastMonthSpent) / summary.lastMonthSpent * 100).toFixed(1) : 'N/A'}% vs last month
+- Budget Change: ${summary.lastMonthBudgeted > 0 ? ((summary.totalBudgeted - summary.lastMonthBudgeted) / summary.lastMonthBudgeted * 100).toFixed(1) : 'N/A'}% vs last month
 
-RECENT TRANSACTIONS (${Math.min(transactions.length, 3)}):
-${transactions.slice(0, 3).map((t: any) => `- ${t.description}: $${t.amount.toFixed(2)} (${t.category || 'Uncategorized'})`).join('\n')}
+SPENDING BY CATEGORY:
+${Object.entries(analysis.spendingByCategory).map(([category, data]: [string, any]) => 
+  `- ${category}: $${data.spent.toFixed(2)}/$${data.budgeted.toFixed(2)} (${data.budgeted > 0 ? ((data.spent / data.budgeted) * 100).toFixed(0) : 0}%)`
+).join('\n')}
+
+ALL BUDGETS (${budgets.length}):
+${budgets.map((b: any) => 
+  `- ${b.name} (${b.category}): Budgeted $${b.amount}, Spent $${b.spent}, Available $${(b.amount - b.spent).toFixed(2)} ${b.amount - b.spent < 0 ? '⚠️' : '✅'}`
+).join('\n')}
+
+ACCOUNTS:
+${accounts.map((a: any) => 
+  `- ${a.accountName} (${a.accountType}): $${a.balance.toFixed(2)}`
+).join('\n')}
+
+RECENT TRANSACTIONS (${transactions.length} this month):
+${transactions.slice(0, 10).map((t: any) => 
+  `- ${t.description}: $${t.amount.toFixed(2)} → ${t.category || 'Uncategorized'} (${new Date(t.date).toLocaleDateString()})`
+).join('\n')}
+
+LARGEST TRANSACTIONS THIS MONTH:
+${analysis.largestTransactions.map((t: any) => 
+  `- ${t.description}: $${Math.abs(t.amount).toFixed(2)} (${t.category || 'Uncategorized'})`
+).join('\n')}
 
 GOALS (${goals.length}):
-${goals.slice(0, 2).map((g: any) => `- ${g.name}: $${g.currentAmount}/$${g.targetAmount} (${g.type})`).join('\n')}
+${goals.map((g: any) => {
+  const progress = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount * 100).toFixed(1) : '0';
+  return `- ${g.name}: $${g.currentAmount}/$${g.targetAmount} (${progress}% complete) - ${g.type}`;
+}).join('\n')}
+
+FINANCIAL INSIGHTS:
+- Monthly Income: $${summary.monthlyIncome.toFixed(2)}
+- Monthly Savings: $${summary.monthlySavings.toFixed(2)}
+- Debt-to-Cash Ratio: ${summary.totalCash > 0 ? (summary.totalDebt / summary.totalCash * 100).toFixed(1) : 'N/A'}%
+- Emergency Fund: ${goals.find((g: any) => g.name.toLowerCase().includes('emergency')) ? 'Yes' : 'No'}
   `;
 
   // Create conversation history for context
@@ -179,40 +295,65 @@ ${goals.slice(0, 2).map((g: any) => `- ${g.name}: $${g.currentAmount}/$${g.targe
       messages: [
         {
           role: "system",
-          content: `You are a concise, helpful financial assistant for a YNAB-style budgeting app. 
+          content: `You are Finley, an expert financial analyst and advisor for a YNAB-style budgeting app. You have full access to the user's financial data and can answer ANY question about their finances with detailed analysis.
 
-PERSONALITY: Be conversational, concise (1-3 sentences max), and action-oriented. Use emojis sparingly.
+PERSONALITY: Be friendly, insightful, and thorough. Provide specific numbers and actionable advice. Use occasional emojis for emphasis.
 
-CAPABILITIES: You can help with:
-- Moving money between budgets
-- Creating new budgets/goals  
-- Analyzing spending patterns
-- Checking account balances
-- Budget recommendations
+CORE CAPABILITIES:
+🔍 FINANCIAL ANALYSIS:
+- Spending pattern analysis and trends
+- Budget performance evaluation  
+- Cash flow analysis and forecasting
+- Debt-to-income ratios and payoff strategies
+- Savings rate optimization
+- Emergency fund adequacy assessment
+- Category-wise spending breakdowns
+- Month-over-month comparisons
 
-RESPONSE FORMAT: 
-- Keep responses under 50 words
-- Always suggest specific actionable buttons when possible
-- For money movements, detect amounts and budget names to offer direct execution
+💡 INTELLIGENT INSIGHTS:
+- Identify spending anomalies and patterns
+- Suggest budget optimizations
+- Recommend savings opportunities
+- Predict future cash flow
+- Alert to potential problems
+- Goal progress tracking and optimization
+
+🎯 DIRECT QUESTION ANSWERING:
+Answer ANY financial question with specific data from their accounts:
+- "How much did I spend on groceries last month?"
+- "Am I saving enough for retirement?"
+- "Which category am I overspending in?"
+- "When will I reach my emergency fund goal?"
+- "How does my spending compare to last month?"
+- "What's my biggest expense category?"
+
+RESPONSE STYLE:
+- Provide specific dollar amounts and percentages
+- Reference actual budget/account names from their data
+- Give concrete recommendations with reasoning
+- Offer actionable next steps when relevant
+- Be thorough but conversational (not just concise)
 
 CURRENT USER'S FINANCIAL STATE:
 ${financialContext}
 
-AVAILABLE ACTIONS (suggest these as buttons when relevant):
-- move_money: Move money between budgets (needs fromBudgetId, toBudgetId, amount)
-- create_budget: Create new budget (needs name, amount) 
-- create_goal: Create savings/debt goal (needs name, targetAmount, type)
+AVAILABLE ACTIONS (use when relevant):
+- move_money: Move money between budgets
+- create_budget: Create new budget
+- create_goal: Create savings/debt goal  
 - fix_overspending: Auto-fix overspent categories
 - open_assign_money: Open assign money interface
 - open_debt_planner: Open debt payoff planner
+- get_detailed_analysis: Show comprehensive financial analysis
 
-EXAMPLES:
-User: "move $50 from groceries to gas"
-Response: "Move $50 from Groceries to Transportation?" + [button: "✅ Move $50"]
+ANALYSIS EXAMPLES:
+User: "How much have I spent on food this month?"
+Response: "You've spent $347 on food this month across Groceries ($243) and Dining Out ($104). That's 23% over your $282 food budget. Consider meal planning to reduce dining out expenses."
 
-User: "how am I doing?"  
-Response: "Looking good! Spent $850 (65%). Have $200 unassigned." + [button: "✅ Assign $200"]
-`
+User: "Am I on track with my savings?"
+Response: "Your current savings rate is 15% ($450/month). For your age and income, financial experts recommend 20%. You're close! Moving $150 from Entertainment to your Emergency Fund would get you there."
+
+Remember: You have access to ALL their financial data. Use specific numbers, account names, and budget categories from their actual data to provide detailed, personalized analysis.`
         },
         ...conversationHistory,
         {
@@ -220,7 +361,7 @@ Response: "Looking good! Spent $850 (65%). Have $200 unassigned." + [button: "�
           content: message
         }
       ],
-      max_tokens: 150,
+      max_tokens: 500,
       temperature: 0.7,
     });
 
