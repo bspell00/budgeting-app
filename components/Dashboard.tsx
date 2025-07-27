@@ -1671,7 +1671,7 @@ const Dashboard = () => {
                                  (dashboardData.toBeAssigned || 0) > 0 ? 'Assign money to budgets' : 'No money available to assign'}
                         >
                           <span className="text-base font-medium">
-                            {isOverbudgeted ? 'Cover Overspending' : 'Assign Money'}
+                            {isOverbudgeted ? 'Cover Spending' : 'Assign Money'}
                           </span>
                           <ChevronDown className="w-5 h-5" />
                         </button>
