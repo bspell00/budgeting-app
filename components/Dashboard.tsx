@@ -113,9 +113,13 @@ const Dashboard = () => {
   const loading = dashboardLoading || accountsLoading;
   const error = dashboardError || accountsError || transactionsError;
   
-  // Calculate overspending
+  // Calculate overspending - only when "To Be Budgeted" is negative (overbudgeted)
+  const isOverbudgeted = (dashboardData?.toBeAssigned || 0) < 0;
+  const overbudgetedAmount = Math.abs(dashboardData?.toBeAssigned || 0);
+  
+  // Get overspent budgets for the flyout interface (when overbudgeted)
   const overspentBudgets = React.useMemo(() => {
-    if (!dashboardData?.categories) return [];
+    if (!dashboardData?.categories || !isOverbudgeted) return [];
     const overspent = [];
     dashboardData.categories.forEach((category: any) => {
       category.budgets?.forEach((budget: any) => {
@@ -129,10 +133,7 @@ const Dashboard = () => {
       });
     });
     return overspent;
-  }, [dashboardData]);
-  
-  const totalOverspentAmount = overspentBudgets.reduce((sum, budget) => sum + budget.overspentAmount, 0);
-  const hasOverspending = overspentBudgets.length > 0;
+  }, [dashboardData, isOverbudgeted]);
 
   // Detection logic for transaction alerts
   const unapprovedTransactions = React.useMemo(() => {
@@ -1917,8 +1918,7 @@ const Dashboard = () => {
                           {formatCurrency(dashboardData.toBeAssigned || 0)}
                         </p>
                         <p className="text-base text-[#9CA3AF] leading-relaxed">
-                          {hasOverspending ? `${overspentBudgets.length} categories overspent by ${formatCurrency(totalOverspentAmount)}` :
-                           (dashboardData.toBeAssigned || 0) < 0 ? 'Overspent - assign money to fix' : 
+                          {isOverbudgeted ? `Overbudgeted by ${formatCurrency(overbudgetedAmount)} - cover overspending` :
                            (dashboardData.toBeAssigned || 0) === 0 ? 'All money assigned' :
                            'Available cash to budget'}
                         </p>
@@ -1926,7 +1926,7 @@ const Dashboard = () => {
                       <div className="flex lg:flex-col lg:items-end">
                         <button
                           onClick={(e) => {
-                            if (hasOverspending || (dashboardData.toBeAssigned || 0) > 0) {
+                            if (isOverbudgeted || (dashboardData.toBeAssigned || 0) > 0) {
                               const rect = (e.target as HTMLElement).getBoundingClientRect();
                               setAssignMoneyPosition({
                                 top: rect.bottom + window.scrollY + 5,
@@ -1935,19 +1935,19 @@ const Dashboard = () => {
                               setShowAssignMoneyPopover(true);
                             }
                           }}
-                          disabled={!hasOverspending && (dashboardData.toBeAssigned || 0) <= 0}
+                          disabled={!isOverbudgeted && (dashboardData.toBeAssigned || 0) <= 0}
                           className={`flex items-center space-x-3 px-6 py-3 rounded-lg transition-all duration-200 ${
-                            hasOverspending
+                            isOverbudgeted
                               ? 'bg-red-50 hover:bg-red-100 text-red-600 hover:scale-105 cursor-pointer border border-red-200 shadow-sm hover:shadow-md'
                               : (dashboardData.toBeAssigned || 0) > 0 
                                 ? 'bg-green-50 hover:bg-green-100 text-green-600 hover:scale-105 cursor-pointer border border-green-200 shadow-sm hover:shadow-md' 
                                 : 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200'
                           }`}
-                          title={hasOverspending ? 'Cover overspending by moving money from other budgets' : 
+                          title={isOverbudgeted ? 'Cover overbudgeting by moving money from other budgets' : 
                                  (dashboardData.toBeAssigned || 0) > 0 ? 'Assign money to budgets' : 'No money available to assign'}
                         >
                           <span className="text-base font-medium">
-                            {hasOverspending ? 'Cover Overspending' : 'Assign Money'}
+                            {isOverbudgeted ? 'Cover Overspending' : 'Assign Money'}
                           </span>
                           <ChevronDown className="w-5 h-5" />
                         </button>
@@ -2492,7 +2492,7 @@ const Dashboard = () => {
         availableAmount={dashboardData?.toBeAssigned || 0}
         position={assignMoneyPosition}
         overspentBudgets={overspentBudgets}
-        isOverspendingMode={hasOverspending}
+        isOverspendingMode={isOverbudgeted}
       />
 
 
