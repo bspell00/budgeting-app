@@ -139,8 +139,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .slice(0, 5);
     
     // Overspending analysis
-    const overspentBudgets = budgets.filter(b => b.available < 0);
-    const totalOverspent = overspentBudgets.reduce((sum, b) => sum + Math.abs(b.available), 0);
+    const overspentBudgets = budgets.filter(b => (b.amount - b.spent) < 0);
+    const totalOverspent = overspentBudgets.reduce((sum, b) => sum + Math.abs(b.amount - b.spent), 0);
     
     // Savings rate calculation
     const monthlyIncome = currentTransactions

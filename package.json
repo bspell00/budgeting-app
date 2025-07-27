@@ -13,8 +13,8 @@
     "db:prod": "cp prisma/schema.prod.prisma prisma/schema.prisma && npx prisma generate"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=8.0.0"
+    "node": "18.x",
+    "npm": "8.x"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
