@@ -13,6 +13,16 @@ interface CategoryGroup {
   }>;
 }
 
+interface OverspentBudget {
+  id: string;
+  name: string;
+  categoryName: string;
+  overspentAmount: number;
+  budgeted: number;
+  spent: number;
+  available: number;
+}
+
 interface AssignMoneyFlyoutProps {
   isOpen: boolean;
   onClose: () => void;
@@ -20,6 +30,8 @@ interface AssignMoneyFlyoutProps {
   categories: CategoryGroup[];
   availableAmount: number;
   position: { top: number; left: number };
+  overspentBudgets?: OverspentBudget[];
+  isOverspendingMode?: boolean;
 }
 
 export default function AssignMoneyFlyout({
@@ -28,7 +40,9 @@ export default function AssignMoneyFlyout({
   onAssignMoney,
   categories,
   availableAmount,
-  position
+  position,
+  overspentBudgets = [],
+  isOverspendingMode = false
 }: AssignMoneyFlyoutProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Monthly Bills', 'Credit Card Payment']));
@@ -39,16 +53,19 @@ export default function AssignMoneyFlyout({
     const budgets: Array<{ id: string; name: string; group: string; data: any }> = [];
     categories.forEach(group => {
       group.budgets.forEach(budget => {
-        budgets.push({
-          id: budget.id,
-          name: budget.name,
-          group: group.name,
-          data: budget
-        });
+        // In overspending mode, only show budgets with available money (not overspent)
+        if (!isOverspendingMode || budget.available > 0) {
+          budgets.push({
+            id: budget.id,
+            name: budget.name,
+            group: group.name,
+            data: budget
+          });
+        }
       });
     });
     return budgets;
-  }, [categories]);
+  }, [categories, isOverspendingMode]);
 
   // Filter budgets based on search term - ALWAYS run this hook
   const filteredBudgets = useMemo(() => {
@@ -86,10 +103,21 @@ export default function AssignMoneyFlyout({
   const handleBudgetClick = (budgetId: string) => {
     if (assignAmount) {
       const amount = parseFloat(assignAmount);
-      if (amount > 0 && amount <= availableAmount) {
-        onAssignMoney(budgetId, amount);
-        setAssignAmount('');
-        onClose();
+      if (isOverspendingMode) {
+        // In overspending mode, we're moving money FROM this budget TO overspent budgets
+        if (amount > 0) {
+          // For overspending, we pass a negative amount to indicate money is being taken FROM this budget
+          onAssignMoney(budgetId, -amount);
+          setAssignAmount('');
+          onClose();
+        }
+      } else {
+        // Normal assign money mode
+        if (amount > 0 && amount <= availableAmount) {
+          onAssignMoney(budgetId, amount);
+          setAssignAmount('');
+          onClose();
+        }
       }
     }
   };
@@ -122,8 +150,10 @@ export default function AssignMoneyFlyout({
         <div className="p-4 border-b border-found-divider">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
-              <DollarSign className="w-5 h-5 text-found-primary" />
-              <h3 className="text-lg font-semibold text-found-text">Assign Money</h3>
+              <DollarSign className={`w-5 h-5 ${isOverspendingMode ? 'text-red-600' : 'text-found-primary'}`} />
+              <h3 className="text-lg font-semibold text-found-text">
+                {isOverspendingMode ? 'Cover Overspending' : 'Assign Money'}
+              </h3>
             </div>
             <button
               onClick={onClose}
@@ -133,13 +163,36 @@ export default function AssignMoneyFlyout({
             </button>
           </div>
           
+          {/* Show overspent budgets when in overspending mode */}
+          {isOverspendingMode && overspentBudgets.length > 0 && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <h4 className="text-sm font-medium text-red-800 mb-2">Overspent Categories</h4>
+              <div className="space-y-1">
+                {overspentBudgets.map((budget) => (
+                  <div key={budget.id} className="flex justify-between text-xs">
+                    <span className="text-red-700">{budget.name}</span>
+                    <span className="text-red-600 font-medium">-{formatCurrency(budget.overspentAmount)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 pt-2 border-t border-red-200">
+                <div className="flex justify-between text-sm font-medium">
+                  <span className="text-red-800">Total Overspent:</span>
+                  <span className="text-red-600">{formatCurrency(overspentBudgets.reduce((sum, b) => sum + b.overspentAmount, 0))}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Amount Input */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-found-text mb-2">
-              Amount to Assign
-              <span className="text-xs text-gray-500 ml-2">
-                (Available: {formatCurrency(availableAmount)})
-              </span>
+              {isOverspendingMode ? 'Amount to Move' : 'Amount to Assign'}
+              {!isOverspendingMode && (
+                <span className="text-xs text-gray-500 ml-2">
+                  (Available: {formatCurrency(availableAmount)})
+                </span>
+              )}
             </label>
             <div className="relative">
               <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -149,15 +202,17 @@ export default function AssignMoneyFlyout({
                 onChange={(e) => setAssignAmount(e.target.value)}
                 placeholder="0.00"
                 min="0"
-                max={availableAmount}
+                max={isOverspendingMode ? undefined : availableAmount}
                 step="0.01"
                 className="w-full pl-10 pr-4 py-2 border border-found-divider rounded-md focus:outline-none focus:ring-2 focus:ring-found-primary focus:border-found-primary"
                 autoFocus
               />
             </div>
             {assignAmount && parseFloat(assignAmount) > 0 && (
-              <p className="text-xs text-green-600 mt-1">
-                Click any budget below to assign {formatCurrency(parseFloat(assignAmount))}
+              <p className={`text-xs mt-1 ${isOverspendingMode ? 'text-red-600' : 'text-green-600'}`}>
+                {isOverspendingMode 
+                  ? `Click a budget below to move ${formatCurrency(parseFloat(assignAmount))} to overspent categories`
+                  : `Click any budget below to assign ${formatCurrency(parseFloat(assignAmount))}`}
               </p>
             )}
           </div>
@@ -167,7 +222,7 @@ export default function AssignMoneyFlyout({
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search budget categories..."
+              placeholder={isOverspendingMode ? "Search budgets with available money..." : "Search budget categories..."}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-found-divider rounded-md focus:outline-none focus:ring-2 focus:ring-found-primary focus:border-found-primary"
@@ -199,7 +254,10 @@ export default function AssignMoneyFlyout({
                   <div className="pb-2">
                     {budgets.map((budget) => {
                       const hasAmount = assignAmount && parseFloat(assignAmount) > 0;
-                      const canAssign = hasAmount && parseFloat(assignAmount) <= availableAmount;
+                      const amount = parseFloat(assignAmount) || 0;
+                      const canAssign = isOverspendingMode 
+                        ? hasAmount && amount <= budget.data.available // Can only take money if budget has enough available
+                        : hasAmount && amount <= availableAmount; // Normal mode validation
                       
                       return (
                         <button
@@ -215,8 +273,12 @@ export default function AssignMoneyFlyout({
                           <div className="flex items-center space-x-2">
                             <span className="text-sm text-found-text">{budget.name}</span>
                             {hasAmount && canAssign && (
-                              <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">
-                                +{formatCurrency(parseFloat(assignAmount))}
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                isOverspendingMode 
+                                  ? 'bg-red-100 text-red-600' 
+                                  : 'bg-green-100 text-green-600'
+                              }`}>
+                                {isOverspendingMode ? '-' : '+'}{formatCurrency(amount)}
                               </span>
                             )}
                           </div>

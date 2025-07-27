@@ -112,6 +112,27 @@ const Dashboard = () => {
   const accounts = accountsData || [];
   const loading = dashboardLoading || accountsLoading;
   const error = dashboardError || accountsError || transactionsError;
+  
+  // Calculate overspending
+  const overspentBudgets = React.useMemo(() => {
+    if (!dashboardData?.categories) return [];
+    const overspent = [];
+    dashboardData.categories.forEach((category: any) => {
+      category.budgets?.forEach((budget: any) => {
+        if (budget.available < 0) {
+          overspent.push({
+            ...budget,
+            categoryName: category.name,
+            overspentAmount: Math.abs(budget.available)
+          });
+        }
+      });
+    });
+    return overspent;
+  }, [dashboardData]);
+  
+  const totalOverspentAmount = overspentBudgets.reduce((sum, budget) => sum + budget.overspentAmount, 0);
+  const hasOverspending = overspentBudgets.length > 0;
 
   // Detection logic for transaction alerts
   const unapprovedTransactions = React.useMemo(() => {
@@ -399,46 +420,74 @@ const Dashboard = () => {
 
   const handleAssignMoney = async (targetBudgetId: string, amount: number) => {
     try {
-      // **OPTIMISTIC UPDATE**: Update the target budget and "To Be Assigned" immediately
-      setDashboardData((prevData: any) => {
-        if (!prevData) return prevData;
-        
-        const newData = { ...prevData };
-        
-        // Update "To Be Assigned" amount
-        newData.toBeAssigned = (newData.toBeAssigned || 0) - amount;
-        
-        // Find and update the target budget
-        if (newData.categories) {
-          newData.categories = newData.categories.map((category: any) => ({
-            ...category,
-            budgets: category.budgets?.map((budget: any) => {
-              if (budget.id === targetBudgetId) {
-                const newBudgeted = budget.budgeted + amount;
-                return {
-                  ...budget,
-                  budgeted: newBudgeted,
-                  available: newBudgeted - budget.spent,
-                  status: newBudgeted - budget.spent > 0 ? 'positive' : 
-                         newBudgeted - budget.spent === 0 ? 'zero' : 'negative'
-                };
-              }
-              return budget;
-            }) || []
-          }));
+      // Check if we're in overspending mode (amount is negative for overspending)
+      const isOverspendingMode = amount < 0;
+      const actualAmount = Math.abs(amount);
+      
+      if (isOverspendingMode) {
+        // Handle overspending coverage - move money FROM targetBudgetId TO overspent budgets
+        const response = await fetch('/api/budget/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromBudgetId: targetBudgetId,
+            overspentBudgets: overspentBudgets,
+            amount: actualAmount,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to transfer funds');
         }
+
+        // Close popover and refresh data
+        setShowAssignMoneyPopover(false);
+        await refreshDashboard();
         
-        return newData;
-      });
-      
-      // Close popover immediately
-      setShowAssignMoneyPopover(false);
-      
-      // Make API call to persist the budget update
-      await handleEditBudget(targetBudgetId, { 
-        amount: (dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
-          .find((budget: any) => budget.id === targetBudgetId)?.budgeted || 0) + amount
-      });
+      } else {
+        // Normal assign money mode - assign from "To Be Assigned" to targetBudgetId
+        // **OPTIMISTIC UPDATE**: Update the target budget and "To Be Assigned" immediately
+        setDashboardData((prevData: any) => {
+          if (!prevData) return prevData;
+          
+          const newData = { ...prevData };
+          
+          // Update "To Be Assigned" amount
+          newData.toBeAssigned = (newData.toBeAssigned || 0) - actualAmount;
+          
+          // Find and update the target budget
+          if (newData.categories) {
+            newData.categories = newData.categories.map((category: any) => ({
+              ...category,
+              budgets: category.budgets?.map((budget: any) => {
+                if (budget.id === targetBudgetId) {
+                  const newBudgeted = budget.budgeted + actualAmount;
+                  return {
+                    ...budget,
+                    budgeted: newBudgeted,
+                    available: newBudgeted - budget.spent,
+                    status: newBudgeted - budget.spent > 0 ? 'positive' : 
+                           newBudgeted - budget.spent === 0 ? 'zero' : 'negative'
+                  };
+                }
+                return budget;
+              }) || []
+            }));
+          }
+          
+          return newData;
+        });
+        
+        // Close popover immediately
+        setShowAssignMoneyPopover(false);
+        
+        // Make API call to persist the budget update
+        await handleEditBudget(targetBudgetId, { 
+          amount: (dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+            .find((budget: any) => budget.id === targetBudgetId)?.budgeted || 0) + actualAmount
+        });
+      }
       
     } catch (error) {
       console.error('Error assigning money:', error);
@@ -1868,7 +1917,8 @@ const Dashboard = () => {
                           {formatCurrency(dashboardData.toBeAssigned || 0)}
                         </p>
                         <p className="text-base text-[#9CA3AF] leading-relaxed">
-                          {(dashboardData.toBeAssigned || 0) < 0 ? 'Overspent - assign money to fix' : 
+                          {hasOverspending ? `${overspentBudgets.length} categories overspent by ${formatCurrency(totalOverspentAmount)}` :
+                           (dashboardData.toBeAssigned || 0) < 0 ? 'Overspent - assign money to fix' : 
                            (dashboardData.toBeAssigned || 0) === 0 ? 'All money assigned' :
                            'Available cash to budget'}
                         </p>
@@ -1876,7 +1926,7 @@ const Dashboard = () => {
                       <div className="flex lg:flex-col lg:items-end">
                         <button
                           onClick={(e) => {
-                            if ((dashboardData.toBeAssigned || 0) > 0) {
+                            if (hasOverspending || (dashboardData.toBeAssigned || 0) > 0) {
                               const rect = (e.target as HTMLElement).getBoundingClientRect();
                               setAssignMoneyPosition({
                                 top: rect.bottom + window.scrollY + 5,
@@ -1885,15 +1935,20 @@ const Dashboard = () => {
                               setShowAssignMoneyPopover(true);
                             }
                           }}
-                          disabled={(dashboardData.toBeAssigned || 0) <= 0}
+                          disabled={!hasOverspending && (dashboardData.toBeAssigned || 0) <= 0}
                           className={`flex items-center space-x-3 px-6 py-3 rounded-lg transition-all duration-200 ${
-                            (dashboardData.toBeAssigned || 0) > 0 
-                              ? 'bg-green-50 hover:bg-green-100 text-green-600 hover:scale-105 cursor-pointer border border-green-200 shadow-sm hover:shadow-md' 
-                              : 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200'
+                            hasOverspending
+                              ? 'bg-red-50 hover:bg-red-100 text-red-600 hover:scale-105 cursor-pointer border border-red-200 shadow-sm hover:shadow-md'
+                              : (dashboardData.toBeAssigned || 0) > 0 
+                                ? 'bg-green-50 hover:bg-green-100 text-green-600 hover:scale-105 cursor-pointer border border-green-200 shadow-sm hover:shadow-md' 
+                                : 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200'
                           }`}
-                          title={(dashboardData.toBeAssigned || 0) > 0 ? 'Assign money to budgets' : 'No money available to assign'}
+                          title={hasOverspending ? 'Cover overspending by moving money from other budgets' : 
+                                 (dashboardData.toBeAssigned || 0) > 0 ? 'Assign money to budgets' : 'No money available to assign'}
                         >
-                          <span className="text-base font-medium">Assign Money</span>
+                          <span className="text-base font-medium">
+                            {hasOverspending ? 'Cover Overspending' : 'Assign Money'}
+                          </span>
                           <ChevronDown className="w-5 h-5" />
                         </button>
                       </div>
@@ -2436,6 +2491,8 @@ const Dashboard = () => {
         categories={dashboardData?.categories || []}
         availableAmount={dashboardData?.toBeAssigned || 0}
         position={assignMoneyPosition}
+        overspentBudgets={overspentBudgets}
+        isOverspendingMode={hasOverspending}
       />
 
 
