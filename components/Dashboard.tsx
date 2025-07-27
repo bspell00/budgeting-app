@@ -426,25 +426,55 @@ const Dashboard = () => {
       const actualAmount = Math.abs(amount);
       
       if (isOverspendingMode) {
-        // Handle overspending coverage - move money FROM targetBudgetId TO overspent budgets
-        const response = await fetch('/api/budget/transfer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fromBudgetId: targetBudgetId,
-            overspentBudgets: overspentBudgets,
-            amount: actualAmount,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to transfer funds');
+        // Handle overbudgeting - reduce budget amount to free up money for "To Be Budgeted"
+        console.log('🔍 Handling overbudgeting transfer:', { targetBudgetId, actualAmount, overspentBudgets });
+        
+        // Simply reduce the budget amount to free up money
+        const currentBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+          .find((budget: any) => budget.id === targetBudgetId);
+        
+        if (!currentBudget) {
+          throw new Error('Selected budget not found');
         }
-
-        // Close popover and refresh data
+        
+        const newBudgetAmount = Math.max(0, currentBudget.budgeted - actualAmount);
+        
+        // **OPTIMISTIC UPDATE**: Update the budget and "To Be Assigned" immediately
+        setDashboardData((prevData: any) => {
+          if (!prevData) return prevData;
+          
+          const newData = { ...prevData };
+          
+          // Increase "To Be Assigned" amount (make it less negative or positive)
+          newData.toBeAssigned = (newData.toBeAssigned || 0) + actualAmount;
+          
+          // Find and update the source budget (reduce its amount)
+          if (newData.categories) {
+            newData.categories = newData.categories.map((category: any) => ({
+              ...category,
+              budgets: category.budgets?.map((budget: any) => {
+                if (budget.id === targetBudgetId) {
+                  return {
+                    ...budget,
+                    budgeted: newBudgetAmount,
+                    available: newBudgetAmount - budget.spent,
+                    status: newBudgetAmount - budget.spent > 0 ? 'positive' : 
+                           newBudgetAmount - budget.spent === 0 ? 'zero' : 'negative'
+                  };
+                }
+                return budget;
+              }) || []
+            }));
+          }
+          
+          return newData;
+        });
+        
+        // Close popover immediately
         setShowAssignMoneyPopover(false);
-        await refreshDashboard();
+        
+        // Make API call to persist the budget update
+        await handleEditBudget(targetBudgetId, { amount: newBudgetAmount });
         
       } else {
         // Normal assign money mode - assign from "To Be Assigned" to targetBudgetId
