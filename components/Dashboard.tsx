@@ -12,6 +12,9 @@ import BudgetItem from './BudgetItem';
 import MoveMoneyPopover from './MoveMoneyPopover';
 import AssignMoneyFlyout from './AssignMoneyFlyout';
 import DebtPayoffDashboard from './DebtPayoffDashboard';
+import { useDashboard } from '../hooks/useDashboard';
+import { useTransactions } from '../hooks/useTransactions';
+import { useAccounts } from '../hooks/useAccounts';
 import { 
   PlusCircle, 
   Target, 
@@ -50,17 +53,47 @@ import AIChat from './AIChat';
 const Dashboard = () => {
   const { data: session } = useSession();
   const router = useRouter();
+  
+  // SWR hooks for real-time data
+  const { 
+    data: dashboardData, 
+    error: dashboardError, 
+    isLoading: dashboardLoading,
+    updateBudgetOptimistic,
+    createBudgetOptimistic,
+    deleteBudgetOptimistic
+  } = useDashboard();
+  
+  const {
+    data: transactionsData,
+    error: transactionsError,
+    isLoading: transactionsLoading,
+    updateTransactionOptimistic,
+    createTransactionOptimistic,
+    deleteTransactionOptimistic,
+    toggleClearedOptimistic
+  } = useTransactions(selectedAccount?.id);
+  
+  const {
+    data: accountsData,
+    error: accountsError,
+    isLoading: accountsLoading,
+    syncAccounts
+  } = useAccounts();
+  
+  // Derived state from SWR data
+  const transactions = transactionsData?.transactions || [];
+  const accounts = accountsData || [];
+  const loading = dashboardLoading || accountsLoading;
+  const error = dashboardError || accountsError || transactionsError;
+  
+  // Local UI state
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
-  const [transactions, setTransactions] = useState<any[]>([]);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [leftSidebarTab, setLeftSidebarTab] = useState('budget');
   const [activeDragItem, setActiveDragItem] = useState<any>(null);
-  const [accounts, setAccounts] = useState<any[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<any>(null);
   const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
   const [editingTransaction, setEditingTransaction] = useState(null);
@@ -186,44 +219,7 @@ const Dashboard = () => {
     }
   };
 
-  // Smart refresh - only updates what's needed
-  const refreshDashboard = async () => {
-    const dashboardResponse = await fetch('/api/dashboard');
-    if (dashboardResponse.ok) {
-      const dashboardData = await dashboardResponse.json();
-      setDashboardData(dashboardData);
-    }
-  };
-
-  const refreshTransactions = async () => {
-    const transactionsResponse = await fetch('/api/transactions');
-    if (transactionsResponse.ok) {
-      const transactionsData = await transactionsResponse.json();
-      setTransactions(transactionsData);
-    }
-  };
-
-  const refreshAccounts = async () => {
-    console.log('🔄 Refreshing accounts...');
-    const accountsResponse = await fetch('/api/accounts');
-    console.log('📡 Accounts API response status:', accountsResponse.status);
-    if (accountsResponse.ok) {
-      const accountsData = await accountsResponse.json();
-      console.log('💰 Received accounts data:', accountsData);
-      setAccounts(accountsData);
-    } else {
-      console.error('❌ Failed to fetch accounts:', accountsResponse.status, accountsResponse.statusText);
-    }
-  };
-
-  // Hot reload function - refreshes all data efficiently
-  const hotReload = async () => {
-    await Promise.all([
-      refreshDashboard(),
-      refreshTransactions(), 
-      refreshAccounts()
-    ]);
-  };
+  // No need for manual refresh functions - SWR handles this automatically
   
   const fetchAISuggestions = async () => {
     try {
@@ -574,20 +570,7 @@ const Dashboard = () => {
 
   const handleCreateBudget = async (budgetData: any) => {
     try {
-      const response = await fetch('/api/budgets', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(budgetData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create budget');
-      }
-
-      // Immediately refresh dashboard data to show new budget
-      await refreshDashboard();
+      await createBudgetOptimistic(budgetData);
       setShowBudgetModal(false);
     } catch (error) {
       console.error('Error creating budget:', error);
@@ -842,82 +825,10 @@ const Dashboard = () => {
 
   const handleEditBudget = async (id: string, updates: { name?: string; amount?: number; category?: string }) => {
     try {
-      console.log('Updating budget:', id, 'with updates:', updates); // Debug log
-      
-      // **OPTIMISTIC UPDATE**: Update UI immediately before API call
-      setDashboardData((prevData: any) => {
-        if (!prevData) return prevData;
-        
-        const newData = { ...prevData };
-        
-        // Find and update the budget in categories
-        if (newData.categories) {
-          newData.categories = newData.categories.map((category: any) => {
-            if (category.id === id) {
-              const updatedCategory = { ...category };
-              if (updates.name !== undefined) updatedCategory.name = updates.name;
-              if (updates.amount !== undefined) {
-                const oldAmount = updatedCategory.budgeted;
-                const newAmount = updates.amount;
-                updatedCategory.budgeted = newAmount;
-                updatedCategory.available = newAmount - updatedCategory.spent;
-                
-                // Update "To Be Assigned" immediately
-                const amountDifference = newAmount - oldAmount;
-                const oldToBeAssigned = newData.toBeAssigned || 0;
-                const newToBeAssigned = oldToBeAssigned - amountDifference;
-                
-                // Update at root level to match API response structure
-                newData.toBeAssigned = newToBeAssigned;
-              }
-              if (updates.category !== undefined) updatedCategory.category = updates.category;
-              
-              // Recalculate status based on new available amount
-              if (updatedCategory.available > 0) {
-                updatedCategory.status = 'positive';
-              } else if (updatedCategory.available === 0) {
-                updatedCategory.status = 'zero';
-              } else {
-                updatedCategory.status = 'negative';
-              }
-              
-              return updatedCategory;
-            }
-            return category;
-          });
-        }
-        
-        return newData;
-      });
-      
-      // Make API call to persist changes
-      const response = await fetch('/api/budgets', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id, ...updates }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to update budget: ${response.status} ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('Budget updated successfully:', result); // Debug log
-
-      // No refresh needed - optimistic update already handled the UI change
+      console.log('Updating budget:', id, 'with updates:', updates);
+      await updateBudgetOptimistic(id, updates);
     } catch (error) {
       console.error('Error updating budget:', error);
-      
-      // **ROLLBACK**: If API call fails, refresh data to revert optimistic update
-      try {
-        await refreshDashboard();
-      } catch (rollbackError) {
-        console.error('Failed to rollback changes:', rollbackError);
-      }
-      
       alert(`Failed to update budget: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -928,16 +839,7 @@ const Dashboard = () => {
     }
 
     try {
-      const response = await fetch(`/api/budgets?id=${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete budget');
-      }
-
-      // Immediately refresh dashboard data
-      await refreshDashboard();
+      await deleteBudgetOptimistic(id);
     } catch (error) {
       console.error('Error deleting budget:', error);
       alert('Failed to delete budget. Please try again.');
