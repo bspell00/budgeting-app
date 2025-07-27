@@ -439,93 +439,34 @@ const Dashboard = () => {
         
         const newBudgetAmount = Math.max(0, currentBudget.budgeted - actualAmount);
         
-        // **OPTIMISTIC UPDATE**: Update the budget and "To Be Assigned" immediately
-        setDashboardData((prevData: any) => {
-          if (!prevData) return prevData;
-          
-          const newData = { ...prevData };
-          
-          // Increase "To Be Assigned" amount (make it less negative or positive)
-          newData.toBeAssigned = (newData.toBeAssigned || 0) + actualAmount;
-          
-          // Find and update the source budget (reduce its amount)
-          if (newData.categories) {
-            newData.categories = newData.categories.map((category: any) => ({
-              ...category,
-              budgets: category.budgets?.map((budget: any) => {
-                if (budget.id === targetBudgetId) {
-                  return {
-                    ...budget,
-                    budgeted: newBudgetAmount,
-                    available: newBudgetAmount - budget.spent,
-                    status: newBudgetAmount - budget.spent > 0 ? 'positive' : 
-                           newBudgetAmount - budget.spent === 0 ? 'zero' : 'negative'
-                  };
-                }
-                return budget;
-              }) || []
-            }));
-          }
-          
-          return newData;
-        });
-        
-        // Close popover immediately
+        // Close popover immediately for better UX
         setShowAssignMoneyPopover(false);
         
-        // Make API call to persist the budget update
-        await handleEditBudget(targetBudgetId, { amount: newBudgetAmount });
+        // Use SWR optimistic update for real-time updates
+        await updateBudgetOptimistic(targetBudgetId, { amount: newBudgetAmount });
         
       } else {
         // Normal assign money mode - assign from "To Be Assigned" to targetBudgetId
-        // **OPTIMISTIC UPDATE**: Update the target budget and "To Be Assigned" immediately
-        setDashboardData((prevData: any) => {
-          if (!prevData) return prevData;
-          
-          const newData = { ...prevData };
-          
-          // Update "To Be Assigned" amount
-          newData.toBeAssigned = (newData.toBeAssigned || 0) - actualAmount;
-          
-          // Find and update the target budget
-          if (newData.categories) {
-            newData.categories = newData.categories.map((category: any) => ({
-              ...category,
-              budgets: category.budgets?.map((budget: any) => {
-                if (budget.id === targetBudgetId) {
-                  const newBudgeted = budget.budgeted + actualAmount;
-                  return {
-                    ...budget,
-                    budgeted: newBudgeted,
-                    available: newBudgeted - budget.spent,
-                    status: newBudgeted - budget.spent > 0 ? 'positive' : 
-                           newBudgeted - budget.spent === 0 ? 'zero' : 'negative'
-                  };
-                }
-                return budget;
-              }) || []
-            }));
-          }
-          
-          return newData;
-        });
+        const currentBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+          .find((budget: any) => budget.id === targetBudgetId);
         
-        // Close popover immediately
+        if (!currentBudget) {
+          throw new Error('Selected budget not found');
+        }
+        
+        const newBudgetAmount = currentBudget.budgeted + actualAmount;
+        
+        // Close popover immediately for better UX
         setShowAssignMoneyPopover(false);
         
-        // Make API call to persist the budget update
-        await handleEditBudget(targetBudgetId, { 
-          amount: (dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
-            .find((budget: any) => budget.id === targetBudgetId)?.budgeted || 0) + actualAmount
-        });
+        // Use SWR optimistic update for real-time updates
+        await updateBudgetOptimistic(targetBudgetId, { amount: newBudgetAmount });
       }
       
     } catch (error) {
       console.error('Error assigning money:', error);
       
-      // **ROLLBACK**: Refresh data to revert optimistic updates
-      await refreshDashboard();
-      
+      // SWR automatically handles rollback on errors
       alert('Failed to assign money. Please try again.');
     }
   };
