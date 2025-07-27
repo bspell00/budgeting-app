@@ -87,7 +87,8 @@ const Dashboard = () => {
     isLoading: dashboardLoading,
     updateBudgetOptimistic,
     createBudgetOptimistic,
-    deleteBudgetOptimistic
+    deleteBudgetOptimistic,
+    refresh: refreshDashboard
   } = useDashboard();
   
   const {
@@ -97,14 +98,16 @@ const Dashboard = () => {
     updateTransactionOptimistic,
     createTransactionOptimistic,
     deleteTransactionOptimistic,
-    toggleClearedOptimistic
+    toggleClearedOptimistic,
+    refresh: refreshTransactions
   } = useTransactions(selectedAccount?.id);
   
   const {
     data: accountsData,
     error: accountsError,
     isLoading: accountsLoading,
-    syncAccounts
+    syncAccounts,
+    refresh: refreshAccounts
   } = useAccounts();
   
   // Derived state from SWR data
@@ -475,111 +478,44 @@ const Dashboard = () => {
     if (!moveMoneySource) return;
     
     try {
-      // **OPTIMISTIC UPDATE**: Update both budgets immediately
-      setDashboardData((prevData: any) => {
-        if (!prevData) return prevData;
-        
-        const newData = { ...prevData };
-        
-        if (newData.categories) {
-          newData.categories = newData.categories.map((category: any) => {
-            if (category.id === moveMoneySource.id) {
-              // Source budget: subtract amount
-              const updatedCategory = { ...category };
-              updatedCategory.budgeted = Math.max(0, updatedCategory.budgeted - amount);
-              updatedCategory.available = updatedCategory.budgeted - updatedCategory.spent;
-              
-              // Update status
-              if (updatedCategory.available > 0) {
-                updatedCategory.status = 'positive';
-              } else if (updatedCategory.available === 0) {
-                updatedCategory.status = 'zero';
-              } else {
-                updatedCategory.status = 'negative';
-              }
-              
-              return updatedCategory;
-            } else if (category.id === targetBudgetId) {
-              // Target budget: add amount
-              const updatedCategory = { ...category };
-              updatedCategory.budgeted = updatedCategory.budgeted + amount;
-              updatedCategory.available = updatedCategory.budgeted - updatedCategory.spent;
-              
-              // Update status
-              if (updatedCategory.available > 0) {
-                updatedCategory.status = 'positive';
-              } else if (updatedCategory.available === 0) {
-                updatedCategory.status = 'zero';
-              } else {
-                updatedCategory.status = 'negative';
-              }
-              
-              return updatedCategory;
-            }
-            return category;
-          });
-        }
-        
-        return newData;
-      });
-      
-      // Close popover immediately
+      // Close popover immediately for better UX
       setShowMoveMoneyPopover(false);
-      setMoveMoneySource(null);
       
-      // Make API calls to persist changes
-      await handleEditBudget(moveMoneySource.id, { 
-        amount: moveMoneySource.budgeted - amount 
-      });
+      // Get current amounts for both budgets
+      const sourceBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+        .find((budget: any) => budget.id === moveMoneySource.id);
+      const targetBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+        .find((budget: any) => budget.id === targetBudgetId);
       
-      const targetBudget = dashboardData?.categories?.find((cat: any) => cat.id === targetBudgetId);
-      if (targetBudget) {
-        await handleEditBudget(targetBudgetId, { 
-          amount: targetBudget.budgeted + amount 
-        });
+      if (!sourceBudget || !targetBudget) {
+        throw new Error('Source or target budget not found');
       }
+      
+      // Calculate new amounts
+      const newSourceAmount = Math.max(0, sourceBudget.budgeted - amount);
+      const newTargetAmount = targetBudget.budgeted + amount;
+      
+      // Use SWR optimistic updates for both budgets
+      await Promise.all([
+        updateBudgetOptimistic(moveMoneySource.id, { amount: newSourceAmount }),
+        updateBudgetOptimistic(targetBudgetId, { amount: newTargetAmount })
+      ]);
+      
+      // Clear source after successful transfer
+      setMoveMoneySource(null);
       
     } catch (error) {
       console.error('Error moving money:', error);
       
-      // Rollback optimistic updates
-      try {
-        await refreshDashboard();
-      } catch (rollbackError) {
-        console.error('Failed to rollback move money changes:', rollbackError);
-      }
-      
+      // SWR automatically handles rollback on errors
       alert('Failed to move money. Please try again.');
     }
   };
 
   const handleTransactionCategoryUpdate = async (transactionId: string, newCategory: string) => {
     try {
-      const response = await fetch('/api/transactions/update-category', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          transactionId, 
-          category: newCategory 
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update transaction category');
-      }
-
-      // Immediately refresh dashboard and transactions
-      await Promise.all([
-        refreshDashboard(),
-        refreshTransactions()
-      ]);
-      
-      // Refresh account transactions to show updated category
-      if (selectedAccount) {
-        fetchAccountTransactions(selectedAccount.id);
-      }
+      // Use SWR optimistic update for transaction category
+      await updateTransactionOptimistic(transactionId, { category: newCategory });
       
       setEditingTransaction(null);
       setCategoryInput('');
@@ -602,51 +538,8 @@ const Dashboard = () => {
 
   const handleCreateTransaction = async (transactionData: any) => {
     try {
-      // **OPTIMISTIC UPDATE**: Add transaction to UI immediately with temporary ID
-      const tempTransaction = {
-        id: `temp-${Date.now()}`,
-        ...transactionData,
-        date: transactionData.date || new Date().toISOString(),
-        cleared: transactionData.cleared || false,
-        isManual: true,
-        account: accounts.find(acc => acc.id === transactionData.accountId) || { accountName: 'Unknown' }
-      };
-      
-      setTransactions(prev => [tempTransaction, ...prev]);
-      
-      // If we're viewing the account this transaction is for, also update accountTransactions optimistically
-      // Use setTimeout to avoid interfering with form state during user interaction
-      if (selectedAccount && transactionData.accountId === selectedAccount.id) {
-        setTimeout(() => {
-          setAccountTransactions(prev => [tempTransaction, ...prev]);
-        }, 0);
-      }
-      
-      // Make API call to persist
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(transactionData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create transaction');
-      }
-      
-      const newTransaction = await response.json();
-
-      // **SYNC WITH SERVER**: Immediately refresh both dashboard and transactions
-      await Promise.all([
-        refreshDashboard(),
-        refreshTransactions()
-      ]);
-      
-      // If we're viewing a specific account, also refresh its transactions
-      if (selectedAccount) {
-        fetchAccountTransactions(selectedAccount.id);
-      }
+      // Use SWR optimistic update for transaction creation
+      await createTransactionOptimistic(transactionData);
     } catch (error) {
       console.error('Error creating transaction:', error);
       alert('Failed to create transaction. Please try again.');
@@ -655,24 +548,8 @@ const Dashboard = () => {
 
   const handleDeleteTransaction = async (transactionId: string) => {
     try {
-      const response = await fetch(`/api/transactions?id=${transactionId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete transaction');
-      }
-
-      // Immediately refresh both dashboard and transactions
-      await Promise.all([
-        refreshDashboard(),
-        refreshTransactions()
-      ]);
-      
-      // If we're viewing a specific account, also refresh its transactions
-      if (selectedAccount) {
-        fetchAccountTransactions(selectedAccount.id);
-      }
+      // Use SWR optimistic update for transaction deletion
+      await deleteTransactionOptimistic(transactionId);
     } catch (error) {
       console.error('Error deleting transaction:', error);
       alert('Failed to delete transaction. Please try again.');
@@ -681,144 +558,20 @@ const Dashboard = () => {
 
   const handleToggleCleared = async (transactionId: string, cleared: boolean) => {
     try {
-      // **OPTIMISTIC UPDATE**: Update cleared status immediately
-      setTransactions(prev => 
-        prev.map(transaction => 
-          transaction.id === transactionId 
-            ? { ...transaction, cleared }
-            : transaction
-        )
-      );
-      
-      // Also update account transactions if viewing specific account
-      if (selectedAccount) {
-        setAccountTransactions(prev => 
-          prev.map(transaction => 
-            transaction.id === transactionId 
-              ? { ...transaction, cleared }
-              : transaction
-          )
-        );
-      }
-      
-      // Make API call to persist
-      const response = await fetch(`/api/transactions?id=${transactionId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ cleared }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update transaction');
-      }
-
-      // **SYNC WITH SERVER**: Immediately refresh dashboard
-      await refreshDashboard();
-
-      // If we're viewing a specific account, also refresh its transactions
-      if (selectedAccount) {
-        fetchAccountTransactions(selectedAccount.id);
-      }
+      // Use SWR optimistic update for transaction cleared status
+      await toggleClearedOptimistic(transactionId, cleared);
     } catch (error) {
       console.error('Error updating transaction:', error);
-      
-      // **ROLLBACK**: Refresh to revert optimistic update
-      try {
-        await refreshDashboard();
-        
-        if (selectedAccount) {
-          fetchAccountTransactions(selectedAccount.id);
-        }
-      } catch (rollbackError) {
-        console.error('Failed to rollback cleared status change:', rollbackError);
-      }
-      
       alert('Failed to update transaction. Please try again.');
     }
   };
 
   const handleUpdateTransaction = async (transactionId: string, updates: any) => {
     try {
-      // **OPTIMISTIC UPDATE**: Update transaction in UI immediately
-      setTransactions((prevTransactions: any[]) => 
-        prevTransactions.map(transaction => 
-          transaction.id === transactionId 
-            ? { ...transaction, ...updates }
-            : transaction
-        )
-      );
-      
-      // Also update account transactions if viewing specific account
-      if (selectedAccount) {
-        setAccountTransactions((prevTransactions: any[]) => 
-          prevTransactions.map(transaction => 
-            transaction.id === transactionId 
-              ? { ...transaction, ...updates }
-              : transaction
-          )
-        );
-      }
-      
-      // Make API call to persist changes
-      const response = await fetch(`/api/transactions?id=${transactionId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update transaction');
-      }
-
-      // **SYNC WITH SERVER**: Refresh data to ensure consistency
-      const [dashboardResponse, transactionsResponse] = await Promise.all([
-        fetch('/api/dashboard'),
-        fetch('/api/transactions')
-      ]);
-      
-      if (dashboardResponse.ok && transactionsResponse.ok) {
-        const [dashboardData, transactionsData] = await Promise.all([
-          dashboardResponse.json(),
-          transactionsResponse.json()
-        ]);
-        setDashboardData(dashboardData);
-        setTransactions(transactionsData);
-      }
-
-      // If we're viewing a specific account, also refresh its transactions
-      if (selectedAccount) {
-        fetchAccountTransactions(selectedAccount.id);
-      }
+      // Use SWR optimistic update for transaction updates
+      await updateTransactionOptimistic(transactionId, updates);
     } catch (error) {
       console.error('Error updating transaction:', error);
-      
-      // **ROLLBACK**: Refresh data to revert optimistic updates
-      try {
-        const [dashboardResponse, transactionsResponse] = await Promise.all([
-          fetch('/api/dashboard'),
-          fetch('/api/transactions')
-        ]);
-        
-        if (dashboardResponse.ok && transactionsResponse.ok) {
-          const [dashboardData, transactionsData] = await Promise.all([
-            dashboardResponse.json(),
-            transactionsResponse.json()
-          ]);
-          setDashboardData(dashboardData);
-          setTransactions(transactionsData);
-        }
-        
-        if (selectedAccount) {
-          fetchAccountTransactions(selectedAccount.id);
-        }
-      } catch (rollbackError) {
-        console.error('Failed to rollback transaction changes:', rollbackError);
-      }
-      
       alert('Failed to update transaction. Please try again.');
     }
   };
@@ -837,8 +590,8 @@ const Dashboard = () => {
         throw new Error('Failed to create goal');
       }
 
-      // Immediately refresh dashboard data
-      await refreshDashboard();
+      // Refresh dashboard data to show new goal
+      refreshDashboard();
     } catch (error) {
       console.error('Error creating goal:', error);
       alert('Failed to create goal. Please try again.');
