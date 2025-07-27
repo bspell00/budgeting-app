@@ -907,8 +907,7 @@ const Dashboard = () => {
       const result = await response.json();
       console.log('Budget updated successfully:', result); // Debug log
 
-      // **SYNC WITH SERVER**: Immediately refresh to ensure data consistency
-      await refreshDashboard();
+      // No refresh needed - optimistic update already handled the UI change
     } catch (error) {
       console.error('Error updating budget:', error);
       
