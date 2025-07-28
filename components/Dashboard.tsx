@@ -79,6 +79,7 @@ const Dashboard = () => {
   const [showAccountClosureModal, setShowAccountClosureModal] = useState(false);
   const [accountToClose, setAccountToClose] = useState<any>(null);
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'unapproved' | 'uncategorized'>('all');
+  const [localLoading, setLocalLoading] = useState(false);
   
   // SWR hooks for real-time data
   const { 
@@ -182,7 +183,7 @@ const Dashboard = () => {
   
   const fetchDashboardData = async (showLoading = true) => {
     try {
-      if (showLoading) setLoading(true);
+      if (showLoading) setLocalLoading(true);
       
       const [dashboardResponse, transactionsResponse, accountsResponse] = await Promise.all([
         fetch('/api/dashboard'),
@@ -239,9 +240,9 @@ const Dashboard = () => {
       // Fetch AI suggestions
       fetchAISuggestions();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      console.error('Dashboard error:', err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
-      if (showLoading) setLoading(false);
+      if (showLoading) setLocalLoading(false);
     }
   };
 
@@ -624,7 +625,7 @@ const Dashboard = () => {
 
   const handleSyncAccounts = async () => {
     try {
-      setLoading(true);
+      setLocalLoading(true);
       const response = await fetch('/api/plaid/sync', {
         method: 'POST',
       });
@@ -641,7 +642,7 @@ const Dashboard = () => {
       console.error('Error syncing accounts:', error);
       alert('Failed to sync accounts. Please try again.');
     } finally {
-      setLoading(false);
+      setLocalLoading(false);
     }
   };
 
