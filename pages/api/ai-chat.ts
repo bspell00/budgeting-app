@@ -371,6 +371,10 @@ FINANCIAL INSIGHTS:
 
   try {
     console.log('Calling OpenAI API with model gpt-4o-mini...');
+    console.log('OpenAI API Key present:', !!process.env.OPENAI_API_KEY);
+    console.log('Message length:', message.length);
+    console.log('Context keys:', Object.keys(context));
+    
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -903,19 +907,104 @@ function generateActionsFromResponse(userMessage: string, aiResponse: string, co
 }
 
 function generateFallbackResponse(message: string, context: any) {
-  const { budgets, accounts, summary } = context;
+  const { budgets, accounts, summary, goals, analysis } = context;
+  const msg = message.toLowerCase();
   
-  // Simple fallback based on keywords
-  if (message.toLowerCase().includes('overview')) {
+  // Enhanced fallback responses with actual financial data
+  if (msg.includes('overview') || msg.includes('how am i doing') || msg.includes('summary')) {
     return handleOverviewIntent(summary, budgets, accounts);
   }
   
-  if (message.toLowerCase().includes('spending')) {
+  if (msg.includes('spending') || msg.includes('spent') || msg.includes('expenses')) {
     return handleSpendingAnalysisIntent(budgets, context.transactions);
   }
   
+  if (msg.includes('budget') && msg.includes('how much')) {
+    const totalBudgeted = budgets.reduce((sum: number, b: any) => sum + b.amount, 0);
+    const totalSpent = budgets.reduce((sum: number, b: any) => sum + b.spent, 0);
+    return {
+      message: `You've budgeted $${totalBudgeted.toFixed(2)} this month and spent $${totalSpent.toFixed(2)} (${totalBudgeted > 0 ? ((totalSpent / totalBudgeted) * 100).toFixed(0) : 0}%). Remaining: $${(totalBudgeted - totalSpent).toFixed(2)}`,
+      actions: []
+    };
+  }
+  
+  if (msg.includes('balance') || msg.includes('account')) {
+    return handleAccountBalanceIntent(accounts, summary);
+  }
+  
+  if (msg.includes('debt') || msg.includes('credit card') || msg.includes('owe')) {
+    return handleDebtIntent(accounts, budgets);
+  }
+  
+  if (msg.includes('emergency') || msg.includes('savings')) {
+    return handleEmergencyFundIntent(goals, summary);
+  }
+  
+  if (msg.includes('goal')) {
+    if (goals.length === 0) {
+      return {
+        message: "You don't have any goals set up yet. Would you like to create a savings goal?",
+        actions: [
+          {
+            type: 'button',
+            label: '✅ Create Emergency Fund ($1,000)',
+            action: 'create_goal',
+            data: { type: 'savings', name: 'Emergency Fund', targetAmount: 1000 }
+          }
+        ]
+      };
+    } else {
+      const goalSummary = goals.map((g: any) => {
+        const progress = g.targetAmount > 0 ? (g.currentAmount / g.targetAmount * 100).toFixed(0) : '0';
+        return `${g.name}: ${progress}% complete ($${g.currentAmount}/$${g.targetAmount})`;
+      }).join('\n');
+      return {
+        message: `Your goals:\n${goalSummary}`,
+        actions: []
+      };
+    }
+  }
+  
+  // Smart category-specific responses
+  const categoryMentions = budgets.filter((b: any) => 
+    msg.includes(b.name.toLowerCase()) || 
+    msg.includes(b.category.toLowerCase())
+  );
+  
+  if (categoryMentions.length > 0) {
+    const budget = categoryMentions[0];
+    const available = budget.amount - budget.spent;
+    return {
+      message: `${budget.name}: Budgeted $${budget.amount}, Spent $${budget.spent}, Available $${available.toFixed(2)} ${available < 0 ? '⚠️ (overspent)' : '✅'}`,
+      actions: available < 0 ? [
+        {
+          type: 'button',
+          label: '✅ Fix Overspending',
+          action: 'fix_overspending',
+          data: { overspentBudgets: [budget] }
+        }
+      ] : []
+    };
+  }
+  
+  // Provide helpful suggestions based on current financial state
+  const suggestions = [];
+  if (summary.toBeAssigned > 0) {
+    suggestions.push(`💰 You have $${summary.toBeAssigned.toFixed(2)} to assign to budgets`);
+  }
+  if (analysis.overspentBudgets?.length > 0) {
+    suggestions.push(`⚠️ ${analysis.overspentBudgets.length} categories are overspent`);
+  }
+  if (goals.length === 0) {
+    suggestions.push(`🎯 Consider setting up an emergency fund goal`);
+  }
+  
+  const helpMessage = suggestions.length > 0 
+    ? `Here's what I noticed:\n${suggestions.join('\n')}\n\nI can help with budgets, spending, goals, and debt. What would you like to work on?`
+    : "I can help with budgets, spending, goals, and debt. What would you like to work on?";
+  
   return {
-    message: "I can help with budgets, spending, goals, and debt. What would you like to do?",
+    message: helpMessage,
     actions: [
       {
         type: 'button',
