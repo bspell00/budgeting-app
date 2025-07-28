@@ -49,7 +49,7 @@ import AccountModal from './AccountModal';
 import AccountClosureModal from './AccountClosureModal';
 import AIAdvisorDashboard from './AIAdvisorDashboard';
 import TransactionAlertBanner from './TransactionAlertBanner';
-import ChatGPTStyleAIChat from './ChatGPTStyleAIChat';
+import AIChat from './AIChat';
 
 const Dashboard = () => {
   const { data: session } = useSession();
@@ -79,7 +79,6 @@ const Dashboard = () => {
   const [showAccountClosureModal, setShowAccountClosureModal] = useState(false);
   const [accountToClose, setAccountToClose] = useState<any>(null);
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'unapproved' | 'uncategorized'>('all');
-  const [isChatMinimized, setIsChatMinimized] = useState(true);
   
   // SWR hooks for real-time data
   const { 
@@ -2284,11 +2283,8 @@ const Dashboard = () => {
         onAccountClosed={handleAccountClosed}
       />
 
-      {/* ChatGPT-Style AI Assistant */}
-      <ChatGPTStyleAIChat 
-        isMinimized={isChatMinimized}
-        onToggleMinimize={() => setIsChatMinimized(!isChatMinimized)}
-      />
+      {/* AI Chat Assistant */}
+      <AIChat onExecuteAction={handleAIAction} />
     </div>
   );
 };
