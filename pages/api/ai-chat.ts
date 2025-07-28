@@ -105,7 +105,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     ]);
 
-    // Calculate comprehensive financial analysis
+    // COMPREHENSIVE FINANCIAL PROFILE ANALYSIS
     const totalBudgeted = budgets.reduce((sum, b) => sum + b.amount, 0);
     const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
     const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
@@ -115,39 +115,105 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const lastMonthBudgeted = lastMonthBudgets.reduce((sum, b) => sum + b.amount, 0);
     const lastMonthSpent = lastMonthBudgets.reduce((sum, b) => sum + b.spent, 0);
     
-    // Spending analysis by category
+    // OVERSPENDING ANALYSIS
+    const overspentBudgets = budgets.filter(b => (b.amount - b.spent) < 0);
+    const totalOverspent = overspentBudgets.reduce((sum, b) => sum + Math.abs(b.amount - b.spent), 0);
+    
+    // YNAB-STYLE FOUR RULES ANALYSIS
+    const rule1_GiveEveryDollarAJob = toBeAssigned === 0;
+    const rule2_EmbraceRealExpenses = goals.filter(g => g.type === 'savings').length > 0;
+    const rule3_RollWithPunches = overspentBudgets.length === 0;
+    const rule4_AgeYourMoney = calculateAgeOfMoney(allTransactions);
+    
+    // DETAILED SPENDING ANALYSIS BY CATEGORY
     const spendingByCategory = budgets.reduce((acc, budget) => {
       const category = budget.category || 'Other';
       if (!acc[category]) {
-        acc[category] = { budgeted: 0, spent: 0, available: 0 };
+        acc[category] = { 
+          budgeted: 0, 
+          spent: 0, 
+          available: 0, 
+          budgetCount: 0,
+          performance: 'good'
+        };
       }
       acc[category].budgeted += budget.amount;
       acc[category].spent += budget.spent;
       acc[category].available += (budget.amount - budget.spent);
+      acc[category].budgetCount += 1;
+      
+      // Performance scoring
+      const utilization = budget.amount > 0 ? (budget.spent / budget.amount) : 0;
+      if (utilization > 1.1) acc[category].performance = 'overspent';
+      else if (utilization > 0.9) acc[category].performance = 'high-usage';
+      else if (utilization < 0.3) acc[category].performance = 'underutilized';
+      
       return acc;
     }, {} as Record<string, any>);
     
-    // Account type analysis
-    const cashAccounts = accounts.filter(a => a.accountType === 'depository');
+    // ACCOUNT TYPE ANALYSIS
+    const cashAccounts = accounts.filter(a => a.accountType === 'depository' || a.accountType === 'investment');
     const creditAccounts = accounts.filter(a => a.accountType === 'credit');
-    const totalCash = cashAccounts.reduce((sum, a) => sum + a.balance, 0);
+    const totalCash = cashAccounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
     const totalDebt = creditAccounts.reduce((sum, a) => sum + Math.abs(a.balance), 0);
     
-    // Transaction insights
+    // TRANSACTION PATTERN ANALYSIS
     const largestTransactions = currentTransactions
       .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
       .slice(0, 5);
     
-    // Overspending analysis
-    const overspentBudgets = budgets.filter(b => (b.amount - b.spent) < 0);
-    const totalOverspent = overspentBudgets.reduce((sum, b) => sum + Math.abs(b.amount - b.spent), 0);
+    const frequentMerchants = analyzeFrequentMerchants(currentTransactions);
+    const spendingTrends = analyzeSpendingTrends(allTransactions, currentMonth, currentYear);
+    const unusualTransactions = findUnusualTransactions(currentTransactions, allTransactions);
     
-    // Savings rate calculation
+    // INCOME AND SAVINGS ANALYSIS
     const monthlyIncome = currentTransactions
-      .filter(t => t.amount > 0 && t.category !== 'Transfer')
+      .filter(t => t.amount > 0 && !['Transfer', 'Credit Card Payment'].includes(t.category))
       .reduce((sum, t) => sum + t.amount, 0);
     const monthlySavings = totalBudgeted - totalSpent;
     const savingsRate = monthlyIncome > 0 ? (monthlySavings / monthlyIncome) * 100 : 0;
+    
+    // FINANCIAL HEALTH SCORING
+    const financialHealthScore = calculateFinancialHealthScore({
+      savingsRate,
+      debtToIncomeRatio: monthlyIncome > 0 ? (totalDebt / (monthlyIncome * 12)) * 100 : 0,
+      emergencyFund: goals.find(g => g.name.toLowerCase().includes('emergency')),
+      budgetUtilization: totalBudgeted > 0 ? (totalSpent / totalBudgeted) * 100 : 0,
+      overspendingAmount: totalOverspent
+    });
+    
+    // GOAL PROGRESS AND PROJECTIONS
+    const goalAnalysis = goals.map(goal => {
+      const monthsToTarget = goal.targetAmount > goal.currentAmount ? 
+        Math.ceil((goal.targetAmount - goal.currentAmount) / (monthlySavings / goals.length)) : 0;
+      return {
+        ...goal,
+        progressPercentage: goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0,
+        monthsToTarget,
+        onTrack: monthsToTarget <= 12
+      };
+    });
+    
+    // BUDGET EFFICIENCY ANALYSIS
+    const budgetEfficiency = analyzeBudgetEfficiency(budgets, currentTransactions);
+    
+    // PREDICTIVE INSIGHTS
+    const predictedOverspending = predictOverspending(budgets, spendingTrends);
+    const cashFlowForecast = forecastCashFlow(accounts, budgets, spendingTrends);
+    
+    // PERSONALIZED RECOMMENDATIONS ENGINE
+    const personalizedRecommendations = generatePersonalizedRecommendations({
+      budgets,
+      accounts,
+      goals,
+      transactions: currentTransactions,
+      spendingTrends,
+      overspentBudgets,
+      savingsRate,
+      totalDebt,
+      monthlyIncome,
+      financialHealthScore
+    });
 
     // Generate AI response using OpenAI
     const aiResponse = await generateOpenAIResponse(message, {
@@ -168,13 +234,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         totalDebt,
         savingsRate,
         monthlyIncome,
-        monthlySavings
+        monthlySavings,
+        financialHealthScore
       },
       analysis: {
         spendingByCategory,
         overspentBudgets,
         totalOverspent,
-        largestTransactions
+        largestTransactions,
+        frequentMerchants,
+        spendingTrends,
+        unusualTransactions,
+        budgetEfficiency,
+        predictedOverspending,
+        cashFlowForecast,
+        goalAnalysis,
+        personalizedRecommendations
+      },
+      ynabRules: {
+        rule1_GiveEveryDollarAJob,
+        rule2_EmbraceRealExpenses,
+        rule3_RollWithPunches,
+        rule4_AgeYourMoney
       },
       history
     });
@@ -317,6 +398,8 @@ CORE CAPABILITIES:
 - Predict future cash flow
 - Alert to potential problems
 - Goal progress tracking and optimization
+- Personalized recommendations based on financial behavior
+- YNAB methodology guidance and best practices
 
 🎯 DIRECT QUESTION ANSWERING:
 Answer ANY financial question with specific data from their accounts:
@@ -336,6 +419,11 @@ RESPONSE STYLE:
 
 CURRENT USER'S FINANCIAL STATE:
 ${financialContext}
+
+PERSONALIZED RECOMMENDATIONS (Top Priority):
+${analysis.personalizedRecommendations.slice(0, 3).map((rec: any, index: number) => 
+  `${index + 1}. [${rec.priority.toUpperCase()}] ${rec.title}: ${rec.description} (${rec.impact})`
+).join('\n')}
 
 AVAILABLE ACTIONS (use when relevant):
 - move_money: Move money between budgets
@@ -843,4 +931,328 @@ function generateFallbackResponse(message: string, context: any) {
       }
     ]
   };
+}
+
+// ADVANCED FINANCIAL ANALYSIS HELPER FUNCTIONS
+
+function calculateAgeOfMoney(transactions: any[]): number {
+  // Simple approximation: average days between income and expenses
+  const incomeTransactions = transactions.filter(t => t.amount > 0);
+  const expenseTransactions = transactions.filter(t => t.amount < 0);
+  
+  if (incomeTransactions.length === 0 || expenseTransactions.length === 0) return 0;
+  
+  const avgIncomeDays = incomeTransactions.reduce((sum, t) => {
+    return sum + (Date.now() - new Date(t.date).getTime()) / (1000 * 60 * 60 * 24);
+  }, 0) / incomeTransactions.length;
+  
+  return Math.floor(avgIncomeDays);
+}
+
+function analyzeFrequentMerchants(transactions: any[]): any[] {
+  const merchantCount = transactions.reduce((acc, t) => {
+    const merchant = t.description || 'Unknown';
+    acc[merchant] = (acc[merchant] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  return Object.entries(merchantCount)
+    .sort(([,a], [,b]) => (b as number) - (a as number))
+    .slice(0, 5)
+    .map(([merchant, count]) => ({ merchant, count }));
+}
+
+function analyzeSpendingTrends(allTransactions: any[], currentMonth: number, currentYear: number): any {
+  const months = [currentMonth - 2, currentMonth - 1, currentMonth].map(m => {
+    const month = m <= 0 ? m + 12 : m;
+    const year = m <= 0 ? currentYear - 1 : currentYear;
+    return { month, year };
+  });
+  
+  const monthlySpending = months.map(({ month, year }) => {
+    const monthTransactions = allTransactions.filter(t => {
+      const tDate = new Date(t.date);
+      return tDate.getMonth() + 1 === month && tDate.getFullYear() === year;
+    });
+    
+    return {
+      month,
+      year,
+      total: monthTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0),
+      count: monthTransactions.length
+    };
+  });
+  
+  return {
+    trend: monthlySpending.length >= 2 ? 
+      (monthlySpending[2].total > monthlySpending[1].total ? 'increasing' : 'decreasing') : 'stable',
+    monthlyData: monthlySpending
+  };
+}
+
+function findUnusualTransactions(currentTransactions: any[], allTransactions: any[]): any[] {
+  // Find transactions that are significantly larger than normal
+  const amounts = allTransactions.map(t => Math.abs(t.amount));
+  const avgAmount = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
+  const threshold = avgAmount * 3; // 3x average is unusual
+  
+  return currentTransactions
+    .filter(t => Math.abs(t.amount) > threshold)
+    .slice(0, 3);
+}
+
+function calculateFinancialHealthScore(metrics: any): number {
+  let score = 0;
+  
+  // Savings rate (0-30 points)
+  if (metrics.savingsRate >= 20) score += 30;
+  else if (metrics.savingsRate >= 10) score += 20;
+  else if (metrics.savingsRate >= 5) score += 10;
+  
+  // Debt-to-income ratio (0-25 points)
+  if (metrics.debtToIncomeRatio <= 10) score += 25;
+  else if (metrics.debtToIncomeRatio <= 30) score += 15;
+  else if (metrics.debtToIncomeRatio <= 50) score += 5;
+  
+  // Emergency fund (0-20 points)
+  if (metrics.emergencyFund) {
+    const fundRatio = metrics.emergencyFund.currentAmount / metrics.emergencyFund.targetAmount;
+    if (fundRatio >= 1) score += 20;
+    else if (fundRatio >= 0.5) score += 10;
+    else if (fundRatio > 0) score += 5;
+  }
+  
+  // Budget utilization (0-15 points)
+  if (metrics.budgetUtilization <= 90) score += 15;
+  else if (metrics.budgetUtilization <= 100) score += 10;
+  
+  // Overspending penalty (0-10 points)
+  if (metrics.overspendingAmount === 0) score += 10;
+  else if (metrics.overspendingAmount < 100) score += 5;
+  
+  return Math.min(score, 100);
+}
+
+function analyzeBudgetEfficiency(budgets: any[], transactions: any[]): any {
+  const categoryEfficiency = budgets.map(budget => {
+    const categoryTransactions = transactions.filter(t => t.category === budget.name);
+    const actualSpending = categoryTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const efficiency = budget.amount > 0 ? (actualSpending / budget.amount) : 0;
+    
+    return {
+      name: budget.name,
+      budgeted: budget.amount,
+      actual: actualSpending,
+      efficiency: efficiency,
+      status: efficiency > 1.1 ? 'overspent' : 
+              efficiency > 0.9 ? 'efficient' : 
+              efficiency < 0.3 ? 'underused' : 'good'
+    };
+  });
+  
+  return {
+    overallEfficiency: categoryEfficiency.reduce((sum, c) => sum + c.efficiency, 0) / budgets.length,
+    categories: categoryEfficiency
+  };
+}
+
+function predictOverspending(budgets: any[], spendingTrends: any): any[] {
+  const currentDate = new Date();
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const daysPassed = currentDate.getDate();
+  const daysRemaining = daysInMonth - daysPassed;
+  
+  const dailySpendRate = daysPassed > 0 ? daysPassed : 1;
+  
+  return budgets.filter(budget => {
+    const currentDailySpend = budget.spent / dailySpendRate;
+    const projectedMonthlySpend = currentDailySpend * daysInMonth;
+    return projectedMonthlySpend > budget.amount * 1.1; // 10% over budget
+  }).map(budget => ({
+    ...budget,
+    projectedOverspend: (budget.spent / dailySpendRate * daysInMonth) - budget.amount
+  }));
+}
+
+function forecastCashFlow(accounts: any[], budgets: any[], spendingTrends: any): any {
+  const totalCash = accounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
+  const monthlyBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
+  const averageMonthlySpending = spendingTrends.monthlyData.reduce((sum: number, m: any) => sum + m.total, 0) / spendingTrends.monthlyData.length;
+  
+  const monthsOfRunway = averageMonthlySpending > 0 ? totalCash / averageMonthlySpending : 0;
+  
+  return {
+    monthsOfRunway: Math.floor(monthsOfRunway),
+    projectedBalance: totalCash - averageMonthlySpending,
+    burnRate: averageMonthlySpending,
+    healthStatus: monthsOfRunway >= 6 ? 'excellent' : 
+                 monthsOfRunway >= 3 ? 'good' : 
+                 monthsOfRunway >= 1 ? 'concerning' : 'critical'
+  };
+}
+
+function generatePersonalizedRecommendations(context: any): any[] {
+  const {
+    budgets,
+    accounts,
+    goals,
+    transactions,
+    spendingTrends,
+    overspentBudgets,
+    savingsRate,
+    totalDebt,
+    monthlyIncome,
+    financialHealthScore
+  } = context;
+  
+  const recommendations = [];
+  
+  // DEBT OPTIMIZATION RECOMMENDATIONS
+  if (totalDebt > 0) {
+    const debtAccounts = accounts.filter((a: any) => a.accountType === 'credit' && a.balance < 0);
+    if (debtAccounts.length > 1) {
+      recommendations.push({
+        priority: 'high',
+        category: 'debt',
+        title: 'Optimize Debt Payoff Strategy',
+        description: `Focus on highest-interest debt first. You could save hundreds in interest by using the debt avalanche method.`,
+        impact: `Potential savings: $${Math.floor(totalDebt * 0.15)}`,
+        actionable: true,
+        confidence: 0.9
+      });
+    }
+  }
+  
+  // EMERGENCY FUND RECOMMENDATIONS  
+  const emergencyFund = goals.find((g: any) => g.name.toLowerCase().includes('emergency'));
+  const recommendedEmergencyAmount = Math.max(1000, monthlyIncome * 3);
+  
+  if (!emergencyFund) {
+    recommendations.push({
+      priority: 'critical',
+      category: 'emergency',
+      title: 'Build Emergency Fund',
+      description: `Start with $1,000 emergency fund, then build to 3-6 months of expenses ($${recommendedEmergencyAmount.toLocaleString()}).`,
+      impact: 'Financial security for unexpected expenses',
+      actionable: true,
+      confidence: 0.95
+    });
+  } else if (emergencyFund.currentAmount < recommendedEmergencyAmount * 0.5) {
+    recommendations.push({
+      priority: 'high',
+      category: 'emergency',
+      title: 'Increase Emergency Fund',
+      description: `Your emergency fund is only ${((emergencyFund.currentAmount / recommendedEmergencyAmount) * 100).toFixed(0)}% of recommended amount.`,
+      impact: `Target: $${recommendedEmergencyAmount.toLocaleString()}`,
+      actionable: true,
+      confidence: 0.85
+    });
+  }
+  
+  // SAVINGS RATE OPTIMIZATION
+  if (savingsRate < 10) {
+    recommendations.push({
+      priority: 'medium',
+      category: 'savings',
+      title: 'Increase Savings Rate',
+      description: `Your current savings rate is ${savingsRate.toFixed(1)}%. Financial experts recommend at least 20%.`,
+      impact: 'Faster wealth building and financial independence',
+      actionable: true,
+      confidence: 0.8
+    });
+  }
+  
+  // OVERSPENDING FIXES
+  if (overspentBudgets.length > 0) {
+    const totalOverspent = overspentBudgets.reduce((sum: number, b: any) => sum + Math.abs(b.amount - b.spent), 0);
+    recommendations.push({
+      priority: 'critical',
+      category: 'spending',
+      title: 'Fix Overspending',
+      description: `${overspentBudgets.length} categories are overspent by $${totalOverspent.toFixed(2)} total.`,
+      impact: 'Get back on budget and prevent debt accumulation',
+      actionable: true,
+      confidence: 0.95
+    });
+  }
+  
+  // BUDGET OPTIMIZATION RECOMMENDATIONS
+  const underutilizedBudgets = budgets.filter((b: any) => b.amount > 0 && (b.spent / b.amount) < 0.3);
+  if (underutilizedBudgets.length > 0) {
+    const totalUnderutilized = underutilizedBudgets.reduce((sum: number, b: any) => sum + (b.amount - b.spent), 0);
+    recommendations.push({
+      priority: 'medium',
+      category: 'spending',
+      title: 'Reallocate Underused Budgets',
+      description: `You have $${totalUnderutilized.toFixed(2)} in underutilized budget categories that could be redirected.`,
+      impact: 'Better budget efficiency and faster goal achievement',
+      actionable: true,
+      confidence: 0.75
+    });
+  }
+  
+  // GOAL ACHIEVEMENT RECOMMENDATIONS
+  const stagnantGoals = goals.filter((g: any) => g.type === 'savings' && g.currentAmount === 0);
+  if (stagnantGoals.length > 0) {
+    recommendations.push({
+      priority: 'medium',
+      category: 'goals',
+      title: 'Start Funding Your Goals',
+      description: `You have ${stagnantGoals.length} unfunded savings goals. Even $25/month makes progress.`,
+      impact: 'Turn dreams into achievable financial milestones',
+      actionable: true,
+      confidence: 0.8
+    });
+  }
+  
+  // INCOME DIVERSIFICATION
+  const incomeTransactions = transactions.filter((t: any) => t.amount > 0);
+  const primaryIncomeSource = incomeTransactions.length > 0;
+  if (primaryIncomeSource && monthlyIncome > 0 && savingsRate > 15) {
+    recommendations.push({
+      priority: 'low',
+      category: 'goals',
+      title: 'Consider Investment Opportunities',
+      description: `With your strong savings rate (${savingsRate.toFixed(1)}%), consider investing for long-term growth.`,
+      impact: 'Accelerated wealth building through compound growth',
+      actionable: false,
+      confidence: 0.6
+    });
+  }
+  
+  // SPENDING PATTERN OPTIMIZATIONS
+  if (spendingTrends.trend === 'increasing') {
+    recommendations.push({
+      priority: 'medium',
+      category: 'spending',
+      title: 'Address Spending Increase',
+      description: 'Your spending has been trending upward. Review recent purchases for opportunities to cut back.',
+      impact: 'Prevent lifestyle inflation and maintain budget control',
+      actionable: true,
+      confidence: 0.7
+    });
+  }
+  
+  // FINANCIAL HEALTH IMPROVEMENTS
+  if (financialHealthScore < 60) {
+    recommendations.push({
+      priority: 'high',
+      category: 'overall',
+      title: 'Improve Financial Health Score',
+      description: `Your financial health score is ${financialHealthScore}/100. Focus on emergency fund, debt reduction, and consistent budgeting.`,
+      impact: 'Overall financial stability and peace of mind',
+      actionable: true,
+      confidence: 0.85
+    });
+  }
+  
+  // Sort by priority and confidence
+  const priorityOrder = { critical: 4, high: 3, medium: 2, low: 1 };
+  return recommendations
+    .sort((a, b) => {
+      const priorityDiff = (priorityOrder[b.priority as keyof typeof priorityOrder] || 0) - (priorityOrder[a.priority as keyof typeof priorityOrder] || 0);
+      if (priorityDiff !== 0) return priorityDiff;
+      return b.confidence - a.confidence;
+    })
+    .slice(0, 8); // Return top 8 recommendations
 }
