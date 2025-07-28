@@ -1226,7 +1226,7 @@ const Dashboard = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <img 
-              src="/img/PNG/logo.png" 
+              src="/img/PNG/logo_2.png" 
               alt="Logo" 
               className="h-12 w-auto"
             />
