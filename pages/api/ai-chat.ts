@@ -509,9 +509,25 @@ Instructions: Answer the user's question using their specific financial data. Be
 
     const aiMessage = completion.choices[0]?.message?.content || "I'm here to help analyze your financial data!";
     
+    // Smart plan detection - check if AI created a plan that could be added to debt payoff page
+    const containsPlan = detectPlanInResponse(aiMessage);
+    const actions = [];
+    
+    if (containsPlan) {
+      actions.push({
+        type: 'button',
+        label: '📋 Add this plan to debt payoff page',
+        action: 'add_to_debt_payoff',
+        data: {
+          planContent: aiMessage,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+    
     return {
       message: aiMessage,
-      actions: [] // Simplified - no predetermined action buttons
+      actions
     };
 
   } catch (error) {
@@ -522,6 +538,54 @@ Instructions: Answer the user's question using their specific financial data. Be
       actions: []
     };
   }
+}
+
+// Smart plan detection function
+function detectPlanInResponse(message: string): boolean {
+  const planIndicators = [
+    // Direct plan mentions
+    'plan', 'strategy', 'approach', 'steps',
+    
+    // Debt-specific terms
+    'debt payoff', 'pay off', 'eliminate debt', 'debt elimination',
+    'snowball', 'avalanche', 'minimum payments',
+    
+    // Timeline indicators
+    'month', 'timeline', 'schedule', 'by when', 'completion',
+    
+    // Action-oriented terms
+    'prioritize', 'focus on', 'start with', 'next step',
+    'recommendation', 'suggest', 'should pay'
+  ];
+  
+  const structureIndicators = [
+    // List or step indicators
+    '1.', '2.', '3.', '•', '-', 'first', 'second', 'third',
+    'step 1', 'step 2', 'phase 1', 'phase 2',
+    
+    // Financial amounts and calculations
+    '$', 'payment', 'balance', 'interest', 'total'
+  ];
+  
+  const messageLower = message.toLowerCase();
+  
+  // Check for plan indicators
+  const hasPlanTerms = planIndicators.some(term => messageLower.includes(term.toLowerCase()));
+  
+  // Check for structured content (numbered lists, steps, etc.)
+  const hasStructure = structureIndicators.some(indicator => messageLower.includes(indicator.toLowerCase()));
+  
+  // Look for numbered or bulleted lists (stronger indicator)
+  const hasNumberedList = /[1-9]\.|•|-/.test(message);
+  
+  // Check for debt-specific context with actionable advice
+  const isDebtRelated = /debt|credit card|loan|owe|payoff|payment/i.test(message);
+  const hasActionableAdvice = /should|recommend|suggest|plan|strategy/i.test(message);
+  
+  // Return true if it looks like a plan
+  return (hasPlanTerms && hasStructure) || 
+         (hasNumberedList && isDebtRelated) ||
+         (isDebtRelated && hasActionableAdvice && message.length > 200); // Substantial debt advice
 }
 
 // All predetermined response functions removed - AI now handles everything conversationally with comprehensive financial data analysis
