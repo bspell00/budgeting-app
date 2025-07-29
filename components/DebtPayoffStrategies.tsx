@@ -13,7 +13,8 @@ import {
   Calendar,
   BarChart3,
   MessageCircle,
-  Plus
+  Plus,
+  Activity
 } from 'lucide-react';
 
 interface Debt {
@@ -47,21 +48,34 @@ interface PaymentRecord {
   month: string;
 }
 
+interface MonthlyPaymentData {
+  month: string;
+  amount: number;
+  count: number;
+  payments: {
+    description: string;
+    amount: number;
+    date: string;
+  }[];
+}
+
 interface DebtPayoffStrategiesProps {
   debts: Debt[];
+  accounts: any[]; // Full account data for payment detection
+  transactions: any[]; // Transaction data for automatic payment tracking
   onOpenAIChat: () => void;
   onRefreshData: () => void;
 }
 
 const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
   debts,
+  accounts,
+  transactions,
   onOpenAIChat,
   onRefreshData
 }) => {
   const [activePlan, setActivePlan] = useState<DebtPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
 
   // Calculate total debt and monthly minimums
   const totalDebt = debts.reduce((sum, debt) => sum + debt.balance, 0);
@@ -72,21 +86,101 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
     loadActivePlan();
   }, []);
 
+  // Automatically detect credit card payments from transactions
+  const detectCreditCardPayments = () => {
+    if (!activePlan || !transactions || !accounts) return [];
+
+    // Get the debt accounts that are part of this plan
+    const debtAccountIds = debts.map(debt => debt.id);
+    
+    // Find payments to credit cards (positive transactions to credit accounts)
+    const creditCardPayments = transactions.filter(transaction => {
+      // Check if this is a payment TO a credit card (positive amount to credit account)
+      const targetAccount = accounts.find(acc => acc.id === transaction.accountId);
+      const isPaymentToCredit = targetAccount?.accountType === 'credit' && transaction.amount > 0;
+      
+      // Or check if this is a payment FROM checking TO credit (negative amount with credit card category)
+      const isPaymentFromChecking = transaction.amount < 0 && 
+        (transaction.category?.toLowerCase().includes('credit card') ||
+         transaction.category?.toLowerCase().includes('payment') ||
+         transaction.description?.toLowerCase().includes('credit card') ||
+         debtAccountIds.some(debtId => 
+           transaction.description?.toLowerCase().includes(accounts.find(acc => acc.id === debtId)?.accountName?.toLowerCase() || '')
+         ));
+
+      return isPaymentToCredit || isPaymentFromChecking;
+    });
+
+    // Group by month and calculate totals
+    const paymentsByMonth = creditCardPayments.reduce((acc, payment) => {
+      const date = new Date(payment.date);
+      const monthKey = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      
+      if (!acc[monthKey]) {
+        acc[monthKey] = {
+          month: monthKey,
+          amount: 0,
+          count: 0,
+          payments: []
+        };
+      }
+      
+      acc[monthKey].amount += Math.abs(payment.amount);
+      acc[monthKey].count += 1;
+      acc[monthKey].payments.push({
+        description: payment.description,
+        amount: Math.abs(payment.amount),
+        date: payment.date
+      });
+      
+      return acc;
+    }, {} as Record<string, MonthlyPaymentData>);
+
+    // Return sorted by date (most recent first)
+    return (Object.values(paymentsByMonth) as MonthlyPaymentData[])
+      .sort((a, b) => new Date(b.payments[0].date).getTime() - new Date(a.payments[0].date).getTime())
+      .slice(0, 6); // Last 6 months
+  };
+
+  // Calculate automatic progress based on actual payments
+  const calculateAutomaticProgress = () => {
+    if (!activePlan || !debts.length) return 0;
+
+    const detectedPayments = detectCreditCardPayments();
+    const totalPaid = detectedPayments.reduce((sum: number, month: MonthlyPaymentData) => sum + month.amount, 0);
+    
+    // Calculate total debt at plan start (this could be enhanced to store original debt amounts)
+    const totalOriginalDebt = debts.reduce((sum, debt) => sum + debt.balance, 0);
+    
+    // Progress = payments made / original debt amount
+    return Math.min((totalPaid / totalOriginalDebt) * 100, 100);
+  };
+
   const loadActivePlan = async () => {
     try {
       const response = await fetch('/api/debt-plans');
       if (response.ok) {
         const data = await response.json();
         setActivePlan(data.activePlan);
+      } else {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to load plans' }));
+        console.error('Error loading active plan:', errorData);
+        // Don't show alert on initial load, just log the error
       }
     } catch (error) {
       console.error('Error loading active plan:', error);
+      // Don't show alert on initial load failure
     } finally {
       setIsLoading(false);
     }
   };
 
   const generateSnowballPlan = async () => {
+    if (debts.length === 0) {
+      alert('No debts found. Connect credit card accounts to create a debt payoff plan.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await fetch('/api/debt-plans/generate', {
@@ -116,6 +210,11 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
   };
 
   const generateAvalanchePlan = async () => {
+    if (debts.length === 0) {
+      alert('No debts found. Connect credit card accounts to create a debt payoff plan.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await fetch('/api/debt-plans/generate', {
@@ -168,38 +267,9 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
     }
   };
 
-  const recordPayment = async () => {
-    if (!activePlan || !paymentAmount) return;
-    
-    setIsRecordingPayment(true);
-    try {
-      const response = await fetch('/api/debt-plans/payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId: activePlan.id,
-          amount: parseFloat(paymentAmount),
-          date: new Date().toISOString()
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setActivePlan(data.updatedPlan);
-        setPaymentAmount('');
-        onRefreshData();
-        alert(`Payment of $${paymentAmount} recorded successfully!`);
-      } else {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to record payment' }));
-        alert(`Error: ${errorData.error || 'Failed to record payment'}`);
-      }
-    } catch (error) {
-      console.error('Error recording payment:', error);
-      alert('Failed to record payment. Please try again.');
-    } finally {
-      setIsRecordingPayment(false);
-    }
-  };
+  // Get detected payments for display
+  const detectedPayments = detectCreditCardPayments();
+  const automaticProgress = calculateAutomaticProgress();
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -246,7 +316,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
             <div className="text-sm text-gray-600">Accounts</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm">
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold" style={{ color: '#aed274' }}>
               {activePlan ? `${activePlan.estimatedMonths}mo` : '--'}
             </div>
             <div className="text-sm text-gray-600">Est. Payoff</div>
@@ -315,7 +385,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                <Target className="w-5 h-5 mr-2 text-green-600" />
+                <Target className="w-5 h-5 mr-2" style={{ color: '#aed274' }} />
                 {activePlan.title}
               </h3>
               <p className="text-sm text-gray-600 mt-1">{activePlan.description}</p>
@@ -336,24 +406,28 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
           {/* Steps */}
           <div className="space-y-3 mb-6">
             {activePlan.steps.map((step, index) => {
-              const isCompleted = index < Math.floor(activePlan.progress / (100 / activePlan.steps.length));
-              const isCurrent = index === Math.floor(activePlan.progress / (100 / activePlan.steps.length));
+              const currentProgress = automaticProgress || activePlan.progress || 0;
+              const isCompleted = index < Math.floor(currentProgress / (100 / activePlan.steps.length));
+              const isCurrent = index === Math.floor(currentProgress / (100 / activePlan.steps.length));
               
               return (
                 <div key={index} className={`flex items-center space-x-3 p-3 rounded-lg ${
-                  isCompleted ? 'bg-green-50 border border-green-200' :
+                  isCompleted ? 'border' : 
                   isCurrent ? 'bg-blue-50 border border-blue-200' :
                   'bg-gray-50 border border-gray-200'
-                }`}>
+                }`} style={{
+                  backgroundColor: isCompleted ? '#f0f9e8' : undefined,
+                  borderColor: isCompleted ? '#aed274' : undefined
+                }}>
                   {isCompleted ? (
-                    <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
+                    <Check className="w-5 h-5 flex-shrink-0" style={{ color: '#aed274' }} />
                   ) : isCurrent ? (
                     <ArrowRight className="w-5 h-5 text-blue-600 flex-shrink-0" />
                   ) : (
                     <Circle className="w-5 h-5 text-gray-400 flex-shrink-0" />
                   )}
                   <span className={`${
-                    isCompleted ? 'text-green-800' :
+                    isCompleted ? 'text-gray-800' :
                     isCurrent ? 'text-blue-800' :
                     'text-gray-600'
                   }`}>
@@ -367,63 +441,68 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
           {/* Progress */}
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Progress</span>
-              <span className="text-sm text-gray-600">{Math.round(activePlan.progress)}%</span>
+              <span className="text-sm font-medium text-gray-700">Progress (Auto-Detected)</span>
+              <span className="text-sm text-gray-600">{Math.round(automaticProgress || 0)}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
-                className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${activePlan.progress}%` }}
+                className="h-2 rounded-full transition-all duration-300"
+                style={{ 
+                  width: `${automaticProgress || 0}%`,
+                  backgroundColor: '#aed274'
+                }}
               ></div>
             </div>
             <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-              <span>{formatCurrency(activePlan.totalDebt * (activePlan.progress / 100))} paid</span>
-              <span>Est. completion: {formatDate(new Date(Date.now() + activePlan.estimatedMonths * 30 * 24 * 60 * 60 * 1000).toISOString())}</span>
+              <span>{formatCurrency(totalDebt * ((automaticProgress || 0) / 100))} paid</span>
+              <span>Based on detected payments</span>
             </div>
           </div>
 
-          {/* Payment Tracker */}
+          {/* Automatic Payment Tracker */}
           <div className="border-t border-gray-200 pt-6">
             <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-              <DollarSign className="w-4 h-4 mr-2 text-green-600" />
-              Payment Tracker
+              <DollarSign className="w-4 h-4 mr-2" style={{ color: '#aed274' }} />
+              Detected Payments
+              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Automatic</span>
             </h4>
             
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Record This Month's Payment
-                </label>
-                <input
-                  type="number"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  placeholder="Enter amount"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <button
-                onClick={recordPayment}
-                disabled={!paymentAmount || isRecordingPayment}
-                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Record
-              </button>
-            </div>
-
-            {/* Recent Payments */}
-            {activePlan.payments && activePlan.payments.length > 0 && (
-              <div className="space-y-2">
-                <h5 className="text-sm font-medium text-gray-700">Recent Payments</h5>
-                <div className="flex flex-wrap gap-2">
-                  {activePlan.payments.slice(0, 6).map((payment, index) => (
-                    <div key={index} className="bg-green-50 border border-green-200 rounded-lg px-3 py-1 text-xs">
-                      <span className="font-medium text-green-800">{payment.month}</span>
-                      <span className="text-green-600 ml-1">{formatCurrency(payment.amount)} ✓</span>
+            {detectedPayments.length > 0 ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {detectedPayments.map((month, index) => (
+                    <div key={index} className="border rounded-lg p-3" style={{ 
+                      backgroundColor: '#f0f9e8', 
+                      borderColor: '#aed274' 
+                    }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-800">{month.month}</span>
+                        <span className="font-semibold" style={{ color: '#aed274' }}>{formatCurrency(month.amount)}</span>
+                      </div>
+                      <div className="text-xs text-gray-700">
+                        {month.count} payment{month.count > 1 ? 's' : ''} detected
+                      </div>
+                      {month.payments.slice(0, 2).map((payment, pIndex: number) => (
+                        <div key={pIndex} className="text-xs text-gray-600 mt-1 truncate">
+                          {payment.description} - {formatCurrency(payment.amount)}
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
+                
+                <div className="text-xs text-gray-500 mt-3 p-3 bg-blue-50 rounded-lg">
+                  <strong>💡 Smart Detection:</strong> Payments are automatically detected from your transaction history. 
+                  This includes direct payments to credit cards and transfers categorized as "Credit Card Payment".
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-gray-500">
+                <Activity className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm">No credit card payments detected yet</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Payments will automatically appear here when you make them
+                </p>
               </div>
             )}
           </div>

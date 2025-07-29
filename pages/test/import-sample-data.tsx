@@ -47,7 +47,10 @@ export default function ImportSampleDataPage() {
           <button
             onClick={handleImportSampleData}
             disabled={loading}
-            className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:opacity-50"
+            className="text-white px-6 py-2 rounded-lg disabled:opacity-50 transition-colors"
+            style={{ backgroundColor: '#aed274' }}
+            onMouseEnter={(e) => !e.currentTarget.disabled && ((e.target as HTMLButtonElement).style.backgroundColor = '#9bc267')}
+            onMouseLeave={(e) => !e.currentTarget.disabled && ((e.target as HTMLButtonElement).style.backgroundColor = '#aed274')}
           >
             {loading ? 'Importing Sample Data...' : 'Import Sample Data'}
           </button>

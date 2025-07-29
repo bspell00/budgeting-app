@@ -35,6 +35,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Strategy and debts are required' });
     }
 
+    if (!['snowball', 'avalanche'].includes(strategy)) {
+      return res.status(400).json({ error: 'Strategy must be either "snowball" or "avalanche"' });
+    }
+
+    if (debts.length === 0) {
+      return res.status(400).json({ error: 'At least one debt is required to create a payoff plan' });
+    }
+
+    // Validate debt objects
+    const invalidDebts = debts.filter(debt => 
+      !debt.id || !debt.accountName || typeof debt.balance !== 'number' || debt.balance <= 0
+    );
+    
+    if (invalidDebts.length > 0) {
+      return res.status(400).json({ error: 'All debts must have id, accountName, and positive balance' });
+    }
+
     // First, deactivate any existing active debt plans
     await prisma.aIPlan.updateMany({
       where: {

@@ -344,7 +344,10 @@ const Dashboard = () => {
                   </div>
                   <button
                     onClick={() => setShowBudgetModal(true)}
-                    className="w-full flex items-center space-x-2 p-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    className="w-full flex items-center space-x-2 p-3 text-white rounded-lg transition-colors"
+                    style={{ backgroundColor: '#aed274' }}
+                    onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#9bc267'}
+                    onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#aed274'}
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>Add Budget Category</span>
@@ -580,7 +583,10 @@ const Dashboard = () => {
                 <h2 className="text-lg font-semibold text-gray-900">Budget Categories</h2>
                 <button 
                   onClick={() => setShowBudgetModal(true)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  className="flex items-center space-x-2 px-4 py-2 text-white rounded-lg transition-colors"
+                  style={{ backgroundColor: '#aed274' }}
+                  onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#9bc267'}
+                  onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#aed274'}
                 >
                   <PlusCircle className="w-4 h-4" />
                   <span>Add Category</span>

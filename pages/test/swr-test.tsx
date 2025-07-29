@@ -120,7 +120,10 @@ export default function SWRTest() {
             <button
               onClick={handleCreateBudget}
               disabled={!budgetName || !budgetAmount}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400"
+              className="px-4 py-2 text-white rounded-md disabled:bg-gray-400 transition-colors"
+              style={{ backgroundColor: '#aed274' }}
+              onMouseEnter={(e) => !e.currentTarget.disabled && ((e.target as HTMLButtonElement).style.backgroundColor = '#9bc267')}
+              onMouseLeave={(e) => !e.currentTarget.disabled && ((e.target as HTMLButtonElement).style.backgroundColor = '#aed274')}
             >
               Create Budget
             </button>

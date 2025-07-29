@@ -16,6 +16,7 @@ interface Message {
 
 interface AIChatProps {
   onExecuteAction: (action: string, data: any) => Promise<void>;
+  ref?: React.Ref<{ openChat: () => void }>;
 }
 
 export default function AIChat({ onExecuteAction }: AIChatProps) {
@@ -223,6 +224,7 @@ export default function AIChat({ onExecuteAction }: AIChatProps) {
       <div className="fixed bottom-6 right-6 z-50">
         <button
           onClick={() => setIsOpen(true)}
+          data-testid="ai-chat-open"
           className="bg-[#e59a7c] hover:bg-[#d18a6b] text-white px-4 py-3 rounded-full shadow-xl transition-all duration-300 hover:scale-110 flex items-center space-x-2"
         >
           <MessageCircle className="w-5 h-5" />

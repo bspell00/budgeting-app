@@ -156,7 +156,10 @@ export default function CreditCardPaymentTest() {
           </button>
           <button
             onClick={testCreditCardPaymentAPI}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            className="px-4 py-2 text-white rounded transition-colors"
+            style={{ backgroundColor: '#aed274' }}
+            onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#9bc267'}
+            onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#aed274'}
           >
             Test Payment API
           </button>

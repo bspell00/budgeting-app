@@ -230,9 +230,10 @@ export default function TransactionModal({
                 onClick={() => setIsExpense(false)}
                 className={`flex-1 flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   !isExpense 
-                    ? 'bg-green-500 text-white' 
+                    ? 'text-white' 
                     : 'text-gray-600 hover:text-gray-800'
                 }`}
+                style={!isExpense ? { backgroundColor: '#aed274' } : {}}
               >
                 <Plus className="w-4 h-4 mr-1" />
                 Income

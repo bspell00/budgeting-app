@@ -100,7 +100,10 @@ export default function ForgotPassword() {
                 </div>
                 <Link 
                   href="/auth/signin"
-                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  className="inline-flex items-center px-4 py-2 text-white rounded-lg transition-colors"
+                  style={{ backgroundColor: '#aed274' }}
+                  onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#9bc267'}
+                  onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = '#aed274'}
                 >
                   Back to Sign In
                 </Link>

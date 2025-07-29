@@ -27,6 +27,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Plan ID, amount, and date are required' });
     }
 
+    if (typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+
+    if (amount > 50000) {
+      return res.status(400).json({ error: 'Payment amount seems unusually large. Please verify.' });
+    }
+
+    // Validate date
+    const paymentDate = new Date(date);
+    if (isNaN(paymentDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
+
     // Get the current plan
     const plan = await prisma.aIPlan.findUnique({
       where: { 
@@ -44,12 +58,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const payments = metadata.payments || [];
 
     // Add new payment
-    const paymentDate = new Date(date);
-    const monthYear = paymentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const paymentDateTime = new Date(date);
+    const monthYear = paymentDateTime.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
     
     const newPayment = {
       id: `payment_${Date.now()}`,
-      amount: parseFloat(amount),
+      amount: amount,
       targetDebt: metadata.debtOrder?.[0] || 'primary', // Target the current focus debt
       date: date,
       month: monthYear
