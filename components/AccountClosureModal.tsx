@@ -161,7 +161,7 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
                   <button
                     onClick={handleManualAdjustment}
                     disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] disabled:opacity-50 transition-colors min-h-[44px] text-sm sm:text-base"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] disabled:opacity-50 transition-colors min-h-[44px] text-sm sm:text-base"
                   >
                     <DollarSign size={18} />
                     {loading ? 'Adjusting & Closing...' : `Adjust to $0 & Close Account`}

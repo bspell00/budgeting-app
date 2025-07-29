@@ -352,7 +352,7 @@ export default function TransactionModal({
               className={`flex-1 px-4 py-2 text-white rounded-md transition-colors disabled:opacity-50 ${
                 isExpense 
                   ? 'bg-red-600 hover:bg-red-700' 
-                  : 'bg-[#86b686] hover:bg-[#73a373]'
+                  : 'bg-[#aed274] hover:bg-[#9bc267]'
               }`}
             >
               {isSubmitting ? 'Adding...' : `Add ${isExpense ? 'Expense' : 'Income'}`}

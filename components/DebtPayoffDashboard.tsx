@@ -212,7 +212,7 @@ export default function DebtPayoffDashboard({ accounts }: DebtPayoffDashboardPro
                 onClick={() => setSelectedStrategy('snowball')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                   selectedStrategy === 'snowball'
-                    ? 'bg-[#86b686] text-white'
+                    ? 'bg-[#aed274] text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
@@ -266,7 +266,7 @@ export default function DebtPayoffDashboard({ accounts }: DebtPayoffDashboardPro
                 onClick={() => setSelectedStrategy('avalanche')}
                 className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                   selectedStrategy === 'avalanche'
-                    ? 'bg-[#86b686] text-white'
+                    ? 'bg-[#aed274] text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >

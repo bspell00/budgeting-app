@@ -9,7 +9,7 @@ export const colors = {
     100: '#feebd9',
     200: '#fbd4b2',
     300: '#f8b780',
-    400: '#f29676', // Main brand color
+    400: '#e8717e', // Main brand color
     500: '#ed7f5a',
     600: '#de6439',
     700: '#b84d2a',
@@ -41,15 +41,15 @@ export const colors = {
   
   // Accent colors
   accent: {
-    primary: '#f29676',    // found-accent equivalent
+    primary: '#e8717e',    // found-accent equivalent
     secondary: '#ed7f5a',
   },
   
   // AI Assistant colors
   ai: {
-    primary: '#86b686',    // Finley AI color for buttons and branding
+    primary: '#aed274',    // Updated green color for buttons and branding
     secondary: '#9cc49c',  // Lighter variant
-    dark: '#73a373',       // Darker variant
+    dark: '#9bc267',       // Darker variant (updated)
   },
   
   // Status colors
@@ -86,14 +86,14 @@ export const colorClasses = {
   borderSecondary: 'border-gray-300',
   
   // Brand classes
-  brandPrimary: 'bg-orange-400', // f29676 equivalent
-  brandPrimaryHover: 'hover:bg-orange-500',
-  brandText: 'text-orange-400',
+  brandPrimary: 'bg-[#e8717e]', // Updated primary color
+  brandPrimaryHover: 'hover:bg-[#d65e6a]',
+  brandText: 'text-[#e8717e]',
   
   // AI Assistant classes
-  aiPrimary: 'bg-[#86b686]',
-  aiPrimaryHover: 'hover:bg-[#73a373]',
-  aiText: 'text-[#86b686]',
+  aiPrimary: 'bg-[#aed274]',
+  aiPrimaryHover: 'hover:bg-[#9bc267]',
+  aiText: 'text-[#aed274]',
   aiSecondary: 'bg-[#9cc49c]',
   
   // Status classes

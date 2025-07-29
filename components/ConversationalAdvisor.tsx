@@ -151,7 +151,7 @@ const ConversationalAdvisor: React.FC = () => {
       <div className="fixed bottom-4 right-4 z-50">
         <button
           onClick={() => setIsMinimized(false)}
-          className="flex items-center space-x-2 bg-[#86b686] text-white px-4 py-3 rounded-full shadow-lg hover:bg-[#73a373] transition-colors"
+          className="flex items-center space-x-2 bg-[#aed274] text-white px-4 py-3 rounded-full shadow-lg hover:bg-[#9bc267] transition-colors"
         >
           <MessageCircle className="w-5 h-5" />
           <span className="hidden sm:block">AI Advisor</span>
@@ -204,7 +204,7 @@ const ConversationalAdvisor: React.FC = () => {
               {/* Message Content */}
               <div className={`p-3 rounded-lg ${
                 message.type === 'user' 
-                  ? 'bg-[#86b686] text-white ml-8' 
+                  ? 'bg-[#aed274] text-white ml-8' 
                   : message.urgencyLevel === 'critical' ? 'bg-red-50 border border-red-200 text-gray-900 mr-8' :
                     message.urgencyLevel === 'high' ? 'bg-orange-50 border border-orange-200 text-gray-900 mr-8' :
                     'bg-gray-100 text-gray-900 mr-8'
@@ -356,7 +356,7 @@ const ConversationalAdvisor: React.FC = () => {
           <button
             onClick={() => sendMessage()}
             disabled={!inputMessage.trim() || isLoading}
-            className="bg-[#86b686] text-white p-2 rounded-lg hover:bg-[#73a373] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-[#aed274] text-white p-2 rounded-lg hover:bg-[#9bc267] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="w-4 h-4" />
           </button>

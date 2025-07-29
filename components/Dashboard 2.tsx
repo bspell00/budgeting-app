@@ -443,7 +443,7 @@ const Dashboard = () => {
                     onClick={() => setShowTransactionModal(true)}
                     className="w-full flex items-center space-x-3 p-3 text-left hover:bg-gray-50 rounded-lg transition-colors"
                   >
-                    <PlusCircle className="w-5 h-5 text-[#86b686]" />
+                    <PlusCircle className="w-5 h-5 text-[#aed274]" />
                     <span>Add Transaction</span>
                   </button>
                   <button
@@ -564,7 +564,7 @@ const Dashboard = () => {
                         <p className="text-gray-500 text-sm">Add more transactions to get AI-powered insights</p>
                         <button 
                           onClick={() => setShowTransactionModal(true)}
-                          className="mt-2 flex items-center space-x-1 text-[#86b686] hover:text-[#73a373] text-sm font-medium"
+                          className="mt-2 flex items-center space-x-1 text-[#aed274] hover:text-[#9bc267] text-sm font-medium"
                         >
                           <PlusCircle className="w-4 h-4" />
                           <span>Add Transaction</span>
@@ -659,7 +659,7 @@ const Dashboard = () => {
                     <h2 className="text-lg font-semibold text-gray-900">All Transactions</h2>
                     <button
                       onClick={() => setShowTransactionModal(true)}
-                      className="flex items-center space-x-2 px-4 py-2 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
                     >
                       <PlusCircle className="w-4 h-4" />
                       <span>Add Transaction</span>

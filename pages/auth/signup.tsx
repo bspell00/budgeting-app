@@ -63,7 +63,7 @@ export default function SignUp() {
             <Link href="/" className="flex items-center space-x-3">
               <div className="w-full h-[50px]">
                 <Image 
-                  src="/img/PNG/logo.png" 
+                  src="/img/PNG/logo_2.png" 
                   alt="Logo" 
                   width={200} 
                   height={50}
@@ -127,7 +127,7 @@ export default function SignUp() {
                     type="text"
                     autoComplete="name"
                     required
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#86b686] focus:border-[#86b686] transition-colors"
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
                     placeholder="Enter your full name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -150,7 +150,7 @@ export default function SignUp() {
                     type="email"
                     autoComplete="email"
                     required
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#86b686] focus:border-[#86b686] transition-colors"
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
                     placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -173,7 +173,7 @@ export default function SignUp() {
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#86b686] focus:border-[#86b686] transition-colors"
+                    className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
                     placeholder="Create a password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -196,7 +196,7 @@ export default function SignUp() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-[#86b686] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#73a373] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#86b686] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                className="w-full bg-[#aed274] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#9bc267] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#aed274] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
               >
                 {isLoading ? (
                   <div className="flex items-center justify-center space-x-2">
@@ -215,18 +215,18 @@ export default function SignUp() {
                 Already have an account?{' '}
                 <Link 
                   href="/auth/signin" 
-                  className="font-medium text-[#86b686] hover:text-[#73a373] transition-colors"
+                  className="font-medium text-[#aed274] hover:text-[#9bc267] transition-colors"
                 >
                   Sign in here
                 </Link>
               </p>
               <p className="text-xs text-gray-500 mt-4">
                 By creating an account, you agree to our{' '}
-                <button className="text-[#86b686] hover:text-[#73a373] transition-colors">
+                <button className="text-[#aed274] hover:text-[#9bc267] transition-colors">
                   Terms of Service
                 </button>
                 {' '}and{' '}
-                <button className="text-[#86b686] hover:text-[#73a373] transition-colors">
+                <button className="text-[#aed274] hover:text-[#9bc267] transition-colors">
                   Privacy Policy
                 </button>
               </p>

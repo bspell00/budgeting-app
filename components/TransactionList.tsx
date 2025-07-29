@@ -314,7 +314,7 @@ export default function TransactionList({
           </div>
           <button
             onClick={handleAddTransaction}
-            className="flex items-center space-x-2 px-4 py-2 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Add Transaction</span>

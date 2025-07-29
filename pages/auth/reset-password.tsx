@@ -101,7 +101,7 @@ export default function ResetPassword() {
             <Link href="/" className="flex items-center space-x-3">
               <div className="w-full h-[50px]">
                 <Image 
-                  src="/img/PNG/logo.png" 
+                  src="/img/PNG/logo_2.png" 
                   alt="Logo" 
                   width={200} 
                   height={50}
@@ -183,7 +183,7 @@ export default function ResetPassword() {
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="new-password"
                       required
-                      className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#86b686] focus:border-[#86b686] transition-colors"
+                      className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
                       placeholder="Enter your new password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -238,7 +238,7 @@ export default function ResetPassword() {
                       type={showConfirmPassword ? 'text' : 'password'}
                       autoComplete="new-password"
                       required
-                      className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#86b686] focus:border-[#86b686] transition-colors"
+                      className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
                       placeholder="Confirm your new password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
@@ -268,7 +268,7 @@ export default function ResetPassword() {
                 <button
                   type="submit"
                   disabled={isLoading || !isPasswordValid || password !== confirmPassword}
-                  className="w-full bg-[#86b686] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#73a373] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#86b686] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                  className="w-full bg-[#aed274] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#9bc267] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#aed274] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
                 >
                   {isLoading ? (
                     <div className="flex items-center justify-center space-x-2">

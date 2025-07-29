@@ -26,7 +26,7 @@ const LandingPage: React.FC = () => {
       icon: Brain,
       title: "Meet Finley, Your AI Financial Assistant",
       description: "Get personalized insights, spending recommendations, and debt payoff strategies powered by advanced AI that learns from your financial patterns.",
-      color: "text-[#86b686]"
+      color: "text-[#aed274]"
     },
     {
       icon: CreditCard,
@@ -64,7 +64,7 @@ const LandingPage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <div className="w-full h-[50px]">
                 <Image 
-                  src="/img/PNG/logo.png" 
+                  src="/img/PNG/logo_2.png" 
                   alt="Logo" 
                   width={200} 
                   height={50}
@@ -83,7 +83,7 @@ const LandingPage: React.FC = () => {
               </button>
               <button
                 onClick={handleSignIn}
-                className="bg-[#86b686] text-white px-6 py-2 rounded-lg hover:bg-[#73a373] transition-colors font-medium"
+                className="bg-[#aed274] text-white px-6 py-2 rounded-lg hover:bg-[#9bc267] transition-colors font-medium"
               >
                 Get Started
               </button>
@@ -99,7 +99,7 @@ const LandingPage: React.FC = () => {
             <div>
               <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
                 Give Your Budget a Brain with 
-                <span className="text-[#86b686] block">AI-Powered Budgeting</span>
+                <span className="text-[#aed274] block">AI-Powered Budgeting</span>
               </h1>
               <p className="text-xl text-gray-600 mt-6 leading-relaxed">
                 Take control of your finances with intelligent automation, real bank integration, 
@@ -109,29 +109,29 @@ const LandingPage: React.FC = () => {
               <div className="mt-8 flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={handleSignIn}
-                  className="bg-[#86b686] text-white px-8 py-4 rounded-xl hover:bg-[#73a373] transition-all duration-300 font-semibold text-lg flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
+                  className="bg-[#aed274] text-white px-8 py-4 rounded-xl hover:bg-[#9bc267] transition-all duration-300 font-semibold text-lg flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
                 >
                   <span>Start Budgeting Free</span>
                   <ArrowRight className="w-5 h-5" />
                 </button>
                 <button
                   onClick={handleSignIn}
-                  className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-xl hover:border-[#86b686] hover:text-[#86b686] transition-all duration-300 font-semibold text-lg"
+                  className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-xl hover:border-[#aed274] hover:text-[#aed274] transition-all duration-300 font-semibold text-lg"
                 >
                   See Demo
                 </button>
               </div>
               <div className="mt-8 flex items-center space-x-6 text-sm text-gray-500">
                 <div className="flex items-center space-x-2">
-                  <Check className="w-4 h-4 text-[#86b686]" />
+                  <Check className="w-4 h-4 text-[#aed274]" />
                   <span>Free forever plan</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Check className="w-4 h-4 text-[#86b686]" />
+                  <Check className="w-4 h-4 text-[#aed274]" />
                   <span>Bank-level security</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Check className="w-4 h-4 text-[#86b686]" />
+                  <Check className="w-4 h-4 text-[#aed274]" />
                   <span>No credit card required</span>
                 </div>
               </div>
@@ -139,13 +139,13 @@ const LandingPage: React.FC = () => {
 
             {/* Hero Image/Visual */}
             <div className="relative">
-              <div className="bg-gradient-to-r from-[#86b686] to-[#9cc49c] rounded-3xl p-8 shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-500">
+              <div className="bg-gradient-to-r from-[#aed274] to-[#9cc49c] rounded-3xl p-8 shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-500">
                 <div className="bg-white rounded-2xl p-6 shadow-lg">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900">Monthly Budget</h3>
                     <div className="flex items-center space-x-1">
-                      <Brain className="w-4 h-4 text-[#86b686]" />
-                      <span className="text-sm text-[#86b686] font-medium">Finley AI</span>
+                      <Brain className="w-4 h-4 text-[#aed274]" />
+                      <span className="text-sm text-[#aed274] font-medium">Finley AI</span>
                     </div>
                   </div>
                   
@@ -162,9 +162,9 @@ const LandingPage: React.FC = () => {
                       <span className="text-sm font-medium">Food</span>
                       <span className="text-gray-900 font-bold">$400</span>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-[#86b686]/10 rounded-lg border border-[#86b686]/20">
-                      <span className="text-sm font-medium text-[#86b686]">Emergency Fund</span>
-                      <span className="text-[#86b686] font-bold">$500</span>
+                    <div className="flex justify-between items-center p-3 bg-[#aed274]/10 rounded-lg border border-[#aed274]/20">
+                      <span className="text-sm font-medium text-[#aed274]">Emergency Fund</span>
+                      <span className="text-[#aed274] font-bold">$500</span>
                     </div>
                   </div>
                   
@@ -184,7 +184,7 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Stats Section */}
-      <section className="bg-[#e59a7c] py-16">
+      <section className="bg-[#e8717e] py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
@@ -229,13 +229,13 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Finley AI Spotlight Section */}
-      <section className="py-24 bg-gradient-to-r from-[#86b686] to-[#9cc49c]">
+      <section className="py-24 bg-gradient-to-r from-[#aed274] to-[#9cc49c]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <div className="flex items-center space-x-3 mb-6">
                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                  <Brain className="w-7 h-7 text-[#86b686]" />
+                  <Brain className="w-7 h-7 text-[#aed274]" />
                 </div>
                 <div>
                   <h2 className="text-3xl font-bold text-white">Meet Finley</h2>
@@ -274,7 +274,7 @@ const LandingPage: React.FC = () => {
             <div className="bg-white rounded-3xl p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-[#86b686] rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-[#aed274] rounded-full flex items-center justify-center">
                     <Brain className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -287,7 +287,7 @@ const LandingPage: React.FC = () => {
 
               <div className="space-y-4 h-64 overflow-y-auto">
                 <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-[#86b686] rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 bg-[#aed274] rounded-full flex items-center justify-center flex-shrink-0">
                     <Brain className="w-4 h-4 text-white" />
                   </div>
                   <div className="bg-gray-100 rounded-2xl p-3 max-w-xs">
@@ -299,18 +299,18 @@ const LandingPage: React.FC = () => {
                   <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                     <Users className="w-4 h-4 text-white" />
                   </div>
-                  <div className="bg-[#86b686] rounded-2xl p-3 max-w-xs">
+                  <div className="bg-[#aed274] rounded-2xl p-3 max-w-xs">
                     <p className="text-sm text-white">Yes, please! I want to save more for my vacation fund.</p>
                   </div>
                 </div>
 
                 <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-[#86b686] rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 bg-[#aed274] rounded-full flex items-center justify-center flex-shrink-0">
                     <Brain className="w-4 h-4 text-white" />
                   </div>
                   <div className="bg-gray-100 rounded-2xl p-3 max-w-xs">
                     <p className="text-sm text-gray-900">Perfect! I suggest moving $150 from your dining budget to vacation savings. You're currently 70% towards your goal - this will get you to 85%! 🎉</p>
-                    <button className="mt-2 bg-[#86b686] text-white px-3 py-1 rounded-lg text-xs font-medium">
+                    <button className="mt-2 bg-[#aed274] text-white px-3 py-1 rounded-lg text-xs font-medium">
                       Let's Do It
                     </button>
                   </div>
@@ -333,7 +333,7 @@ const LandingPage: React.FC = () => {
           </p>
           <button
             onClick={handleSignIn}
-            className="bg-[#86b686] text-white px-8 py-4 rounded-xl hover:bg-[#73a373] transition-all duration-300 font-semibold text-lg inline-flex items-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
+            className="bg-[#aed274] text-white px-8 py-4 rounded-xl hover:bg-[#9bc267] transition-all duration-300 font-semibold text-lg inline-flex items-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
           >
             <span>Get Started Free</span>
             <ArrowRight className="w-5 h-5" />
@@ -351,7 +351,7 @@ const LandingPage: React.FC = () => {
             <div className="flex items-center space-x-3 mb-4 md:mb-0">
               <div className="w-8 h-8">
                 <Image 
-                  src="/img/PNG/logo.png" 
+                  src="/img/PNG/logo_2.png" 
                   alt="Logo" 
                   width={32} 
                   height={32}

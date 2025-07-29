@@ -1254,9 +1254,9 @@ const Dashboard = () => {
           </div>
           <p className="text-gray-700 font-halyard font-bold animate-pulse">Loading your financial dashboard...</p>
           <div className="mt-4 flex justify-center space-x-1">
-            <div className="w-2 h-2 bg-[#86b686] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-2 h-2 bg-[#86b686] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-2 h-2 bg-[#86b686] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <div className="w-2 h-2 bg-[#aed274] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 bg-[#aed274] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 bg-[#aed274] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
           </div>
         </div>
       </div>
@@ -1365,7 +1365,10 @@ const Dashboard = () => {
           <div className="flex items-center space-x-1 sm:space-x-3 overflow-x-auto">
             <button
               onClick={() => setShowAccountTypeModal(true)}
-              className="flex items-center space-x-1 sm:space-x-2 bg-gradient-to-r from-[#86b686] to-[#9cc49c] text-white px-2 sm:px-4 py-2 rounded-xl hover:from-[#73a373] hover:to-[#86b686] transition-all duration-300 text-sm font-medium flex-shrink-0 shadow-lg hover:shadow-xl hover:scale-105 border border-white/20"
+              className="flex items-center space-x-1 sm:space-x-2 text-white px-2 sm:px-4 py-2 rounded-xl transition-all duration-300 text-sm font-medium flex-shrink-0 shadow-lg hover:shadow-xl hover:scale-105 border border-white/20"
+              style={{ backgroundColor: '#aed274' }}
+              onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#9bc267'}
+              onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#aed274'}
             >
               <PlusCircle className="w-4 h-4" />
               <span className="font-halyard font-bold">Add Account</span>
@@ -1402,7 +1405,7 @@ const Dashboard = () => {
               onClick={() => setLeftSidebarTab('budget')}
               className={`flex items-center space-x-4 px-6 py-4 text-base font-normal transition-colors ${
                 leftSidebarTab === 'budget'
-                  ? 'text-[#151418] bg-[#86b686] bg-opacity-10'
+                  ? 'text-[#151418] bg-[#aed274] bg-opacity-10'
                   : 'text-[#9CA3AF] hover:text-[#151418] hover:bg-[#EFF2F0]'
               }`}
             >
@@ -1413,7 +1416,7 @@ const Dashboard = () => {
               onClick={() => setLeftSidebarTab('transactions')}
               className={`flex items-center space-x-4 px-6 py-4 text-base font-normal transition-colors ${
                 leftSidebarTab === 'transactions'
-                  ? 'text-[#151418] bg-[#86b686] bg-opacity-10'
+                  ? 'text-[#151418] bg-[#aed274] bg-opacity-10'
                   : 'text-[#9CA3AF] hover:text-[#151418] hover:bg-[#EFF2F0]'
               }`}
             >
@@ -1424,7 +1427,7 @@ const Dashboard = () => {
               onClick={() => setLeftSidebarTab('debt')}
               className={`flex items-center space-x-4 px-6 py-4 text-base font-normal transition-colors ${
                 leftSidebarTab === 'debt'
-                  ? 'text-[#151418] bg-[#86b686] bg-opacity-10'
+                  ? 'text-[#151418] bg-[#aed274] bg-opacity-10'
                   : 'text-[#9CA3AF] hover:text-[#151418] hover:bg-[#EFF2F0]'
               }`}
             >
@@ -1467,7 +1470,12 @@ const Dashboard = () => {
                   }
                 }}
               >
-                <button className="w-full flex items-center space-x-2 p-3 bg-gradient-to-r from-[#86b686] to-[#9cc49c] text-white rounded-xl hover:from-[#73a373] hover:to-[#86b686] transition-all duration-300 mb-4 shadow-lg hover:shadow-xl hover:scale-[1.02] border border-white/10">
+                <button 
+                  className="w-full flex items-center space-x-2 p-3 text-white rounded-xl transition-all duration-300 mb-4 shadow-lg hover:shadow-xl hover:scale-[1.02] border border-white/10"
+                  style={{ backgroundColor: '#aed274' }}
+                  onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#9bc267'}
+                  onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#aed274'}
+                >
                   <PlusCircle className="w-4 h-4" />
                   <span className="font-halyard font-bold">Add Account</span>
                 </button>
@@ -1632,7 +1640,7 @@ const Dashboard = () => {
                   </div>
                   <button
                     onClick={() => setShowBudgetModal(true)}
-                    className="w-full flex items-center space-x-2 p-3 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] transition-colors"
+                    className="w-full flex items-center space-x-2 p-3 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>Add Budget Line</span>
@@ -1647,7 +1655,7 @@ const Dashboard = () => {
                   <h3 className="text-lg font-semibold text-[#151418]">Recent Transactions</h3>
                   <button
                     onClick={() => {/* No modal needed */}}
-                    className="text-[#f29676] hover:text-[#e8825f] text-sm font-medium"
+                    className="text-[#e8717e] hover:text-[#d65e6a] text-sm font-medium"
                   >
                     Add
                   </button>
@@ -1848,7 +1856,7 @@ const Dashboard = () => {
                     onClick={() => setShowProgressBars(!showProgressBars)}
                     className={`flex items-center space-x-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                       showProgressBars 
-                        ? 'bg-[#86b686] bg-opacity-20 text-[#86b686] hover:bg-opacity-30' 
+                        ? 'bg-[#aed274] bg-opacity-20 text-[#aed274] hover:bg-opacity-30' 
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                     title={showProgressBars ? 'Hide progress bars' : 'Show progress bars'}
@@ -1858,7 +1866,7 @@ const Dashboard = () => {
                   </button>
                   <button 
                     onClick={() => setShowBudgetModal(true)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] transition-colors"
+                    className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>Add Budget Line</span>
@@ -1933,7 +1941,7 @@ const Dashboard = () => {
                     <h2 className="text-lg font-semibold text-gray-900">All Transactions</h2>
                     <button
                       onClick={() => {/* No modal needed */}}
-                      className="flex items-center space-x-2 px-4 py-2 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
                     >
                       <PlusCircle className="w-4 h-4" />
                       <span>Add Transaction</span>
@@ -2052,7 +2060,7 @@ const Dashboard = () => {
                           // Trigger inline transaction entry in the account view
                           setLeftSidebarTab('accounts'); // Make sure we're on accounts tab
                         }}
-                        className="flex items-center space-x-2 px-4 py-2 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] transition-colors"
+                        className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
                       >
                         <PlusCircle className="w-4 h-4" />
                         <span>Add Transaction</span>
@@ -2114,12 +2122,12 @@ const Dashboard = () => {
                 <div className="p-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <Brain className="w-6 h-6 text-[#86b686]" />
+                      <Brain className="w-6 h-6 text-[#aed274]" />
                       <h2 className="text-lg font-semibold text-gray-900">Finley's Financial Insights</h2>
                     </div>
                     <button
                       onClick={() => fetchAISuggestions()}
-                      className="flex items-center space-x-2 px-3 py-1 rounded-lg text-sm font-medium bg-[#86b686] bg-opacity-20 text-[#86b686] hover:bg-opacity-30 transition-colors"
+                      className="flex items-center space-x-2 px-3 py-1 rounded-lg text-sm font-medium bg-[#aed274] bg-opacity-20 text-[#aed274] hover:bg-opacity-30 transition-colors"
                     >
                       <RefreshCw className="w-4 h-4" />
                       <span>Refresh Insights</span>
@@ -2146,13 +2154,13 @@ const Dashboard = () => {
                                     insight.type === 'warning' ? 'text-red-600' :
                                     insight.type === 'tip' ? 'text-blue-600' :
                                     insight.type === 'success' ? 'text-green-600' :
-                                    insight.type === 'goal' ? 'text-[#86b686]' :
+                                    insight.type === 'goal' ? 'text-[#aed274]' :
                                     'text-gray-600'
                                   }`} />
                                 ) : insight.type === 'success' ? (
                                   <CheckCircle className="w-5 h-5 text-green-600" />
                                 ) : insight.type === 'goal' ? (
-                                  <Target className="w-5 h-5 text-[#86b686]" />
+                                  <Target className="w-5 h-5 text-[#aed274]" />
                                 ) : (
                                   <Lightbulb className="w-5 h-5 text-blue-600" />
                                 )}
@@ -2163,7 +2171,7 @@ const Dashboard = () => {
                                   insight.type === 'warning' ? 'bg-red-100 text-red-700' :
                                   insight.type === 'tip' ? 'bg-blue-100 text-blue-700' :
                                   insight.type === 'success' ? 'bg-green-100 text-green-700' :
-                                  insight.type === 'goal' ? 'bg-[#86b686] bg-opacity-20 text-[#86b686]' :
+                                  insight.type === 'goal' ? 'bg-[#aed274] bg-opacity-20 text-[#aed274]' :
                                   'bg-gray-100 text-gray-700'
                                 }`}>
                                   {insight.type}
@@ -2181,7 +2189,7 @@ const Dashboard = () => {
                           <p className="text-gray-600 mb-4 leading-relaxed">
                             {insight.description}
                             {insight.action && (
-                              <span className="block mt-2 font-medium text-[#86b686]">
+                              <span className="block mt-2 font-medium text-[#aed274]">
                                 💡 Suggestion: {insight.action}
                               </span>
                             )}
@@ -2192,7 +2200,7 @@ const Dashboard = () => {
                               <div className="flex items-center space-x-2">
                                 <div className="w-20 bg-gray-200 rounded-full h-2">
                                   <div 
-                                    className="bg-[#86b686] h-2 rounded-full transition-all duration-300" 
+                                    className="bg-[#aed274] h-2 rounded-full transition-all duration-300" 
                                     style={{width: `${insight.confidence}%`}}
                                   ></div>
                                 </div>
@@ -2203,7 +2211,7 @@ const Dashboard = () => {
                             {insight.action && (
                               <button
                                 onClick={() => handleInsightAction(insight)}
-                                className="flex items-center space-x-2 px-4 py-2 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] transition-colors"
+                                className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
                               >
                                 <span>Let's Do It</span>
                                 <ArrowRight className="w-4 h-4" />
@@ -2222,7 +2230,7 @@ const Dashboard = () => {
                       </p>
                       <button
                         onClick={() => fetchAISuggestions()}
-                        className="flex items-center space-x-2 px-4 py-2 bg-[#86b686] text-white rounded-lg hover:bg-[#73a373] transition-colors mx-auto"
+                        className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors mx-auto"
                       >
                         <RefreshCw className="w-4 h-4" />
                         <span>Generate Insights</span>
@@ -2244,7 +2252,7 @@ const Dashboard = () => {
                   <h3 className="text-lg font-semibold text-gray-900">Savings Goals</h3>
                   <button
                     onClick={() => setShowGoalModal(true)}
-                    className="text-[#f29676] hover:text-[#e8825f] text-sm font-medium"
+                    className="text-[#e8717e] hover:text-[#d65e6a] text-sm font-medium"
                   >
                     Add Goal
                   </button>
@@ -2285,7 +2293,10 @@ const Dashboard = () => {
                       <p className="text-sm">No savings goals yet</p>
                       <button
                         onClick={() => setShowGoalModal(true)}
-                        className="mt-2 text-green-600 hover:text-green-700 text-sm font-medium"
+                        className="mt-2 text-sm font-medium transition-colors"
+                        style={{ color: '#aed274' }}
+                        onMouseEnter={(e) => (e.target as HTMLButtonElement).style.color = '#9bc267'}
+                        onMouseLeave={(e) => (e.target as HTMLButtonElement).style.color = '#aed274'}
                       >
                         Create your first goal
                       </button>
@@ -2398,7 +2409,7 @@ const Dashboard = () => {
             <div className="space-y-3">
               <PlaidLink onSuccess={handlePlaidSuccess} onExit={handlePlaidExit}>
                 <button 
-                  className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-[#86b686]/10 to-[#9cc49c]/10 border border-[#86b686]/30 rounded-xl hover:from-[#86b686]/20 hover:to-[#9cc49c]/20 hover:border-[#86b686]/50 transition-all duration-300 hover:scale-[1.02] shadow-sm hover:shadow-md"
+                  className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-[#aed274]/10 to-[#9cc49c]/10 border border-[#aed274]/30 rounded-xl hover:from-[#aed274]/20 hover:to-[#9cc49c]/20 hover:border-[#aed274]/50 transition-all duration-300 hover:scale-[1.02] shadow-sm hover:shadow-md"
                 >
                   <div className="text-left">
                     <div className="font-halyard font-bold text-found-text">Connect Bank Account</div>

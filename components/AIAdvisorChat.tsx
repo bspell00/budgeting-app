@@ -209,7 +209,7 @@ const AIAdvisorChat: React.FC<AIAdvisorChatProps> = ({ onPlanGenerated, onBudget
               {/* Message Content */}
               <div className={`p-4 rounded-lg ${
                 message.type === 'user' 
-                  ? 'bg-[#86b686] text-white ml-8' 
+                  ? 'bg-[#aed274] text-white ml-8' 
                   : `${getUrgencyColor(message.urgencyLevel)} text-gray-900 mr-8 border`
               }`}>
                 <div className="whitespace-pre-wrap">{message.content}</div>
@@ -379,7 +379,7 @@ const AIAdvisorChat: React.FC<AIAdvisorChatProps> = ({ onPlanGenerated, onBudget
           <button
             onClick={() => sendMessage()}
             disabled={!inputMessage.trim() || isLoading}
-            className="bg-[#86b686] text-white p-2 rounded-lg hover:bg-[#73a373] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="bg-[#aed274] text-white p-2 rounded-lg hover:bg-[#9bc267] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="w-4 h-4" />
           </button>

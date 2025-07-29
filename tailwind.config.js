@@ -21,7 +21,7 @@ module.exports = {
         },
         // Found Banking Interface Colors
         found: {
-          'primary': '#f29676',     // Warm Orange
+          'primary': '#e8717e',     // Updated Primary Color
           'accent': '#f4a688',      // Light Orange Accent  
           'background': '#F8F8F5',  // Off-White
           'surface': '#FFFFFF',     // Surface/Cards

@@ -153,7 +153,7 @@ export default function GoalModal({ isOpen, onClose, onSubmit }: GoalModalProps)
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 px-4 py-2 bg-[#86b686] text-white rounded-md hover:bg-[#73a373] transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-[#aed274] text-white rounded-md hover:bg-[#9bc267] transition-colors disabled:opacity-50"
             >
               {isSubmitting ? 'Creating...' : 'Create Goal'}
             </button>

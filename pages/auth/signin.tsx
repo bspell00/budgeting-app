@@ -47,7 +47,7 @@ export default function SignIn() {
             <Link href="/" className="flex items-center space-x-3">
               <div className="w-full h-[50px]">
                 <Image 
-                  src="/img/PNG/logo.png" 
+                  src="/img/PNG/logo_2.png" 
                   alt="Logo" 
                   width={200} 
                   height={50}
@@ -111,7 +111,7 @@ export default function SignIn() {
                     type="email"
                     autoComplete="email"
                     required
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#86b686] focus:border-[#86b686] transition-colors"
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
                     placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -134,7 +134,7 @@ export default function SignIn() {
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     required
-                    className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#86b686] focus:border-[#86b686] transition-colors"
+                    className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -157,7 +157,7 @@ export default function SignIn() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-[#86b686] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#73a373] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#86b686] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                className="w-full bg-[#aed274] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#9bc267] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#aed274] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
               >
                 {isLoading ? (
                   <div className="flex items-center justify-center space-x-2">
@@ -176,7 +176,7 @@ export default function SignIn() {
                 Don't have an account?{' '}
                 <Link 
                   href="/auth/signup" 
-                  className="font-medium text-[#86b686] hover:text-[#73a373] transition-colors"
+                  className="font-medium text-[#aed274] hover:text-[#9bc267] transition-colors"
                 >
                   Sign up for free
                 </Link>
@@ -185,7 +185,7 @@ export default function SignIn() {
                 Forgot your password?{' '}
                 <Link 
                   href="/auth/forgot-password"
-                  className="text-[#86b686] hover:text-[#73a373] transition-colors"
+                  className="text-[#aed274] hover:text-[#9bc267] transition-colors"
                 >
                   Reset it here
                 </Link>

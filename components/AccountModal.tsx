@@ -199,7 +199,7 @@ export default function AccountModal({ isOpen, onClose, onSubmit }: AccountModal
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#86b686] text-white rounded-md hover:bg-[#73a373]"
+              className="px-4 py-2 bg-[#aed274] text-white rounded-md hover:bg-[#9bc267]"
             >
               Add Account
             </button>
