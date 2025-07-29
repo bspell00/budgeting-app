@@ -165,6 +165,19 @@ export default function AIChat({ onExecuteAction }: AIChatProps) {
         return;
       }
 
+      // Handle add to debt payoff page action
+      if (action === 'add_to_debt_payoff') {
+        await onExecuteAction(action, data);
+        const confirmMessage: Message = {
+          id: Date.now().toString(),
+          type: 'ai',
+          content: `✅ Plan added to debt payoff page! You can view and manage it there.`,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, confirmMessage]);
+        return;
+      }
+
       // For API actions, call the ai-actions endpoint
       const response = await fetch('/api/ai-actions', {
         method: 'POST',

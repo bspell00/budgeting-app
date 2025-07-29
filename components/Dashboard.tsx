@@ -1077,6 +1077,47 @@ const Dashboard = () => {
     // Handle drag over logic if needed
   };
 
+  // Add AI plan to debt payoff page
+  const handleAddPlanToDebtPayoff = async (data: any) => {
+    try {
+      const response = await fetch('/api/ai-plans', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'AI-Generated Debt Payoff Plan',
+          description: data.planContent,
+          category: 'debt',
+          priority: 'high',
+          timeframe: 'medium',
+          estimatedImpact: 'significant',
+          steps: JSON.stringify([
+            'Review the AI-generated plan below',
+            'Adjust amounts based on your specific situation',
+            'Follow the recommended payment strategy',
+            'Monitor progress monthly'
+          ]),
+          metadata: JSON.stringify({
+            source: 'ai_chat',
+            confidence: 'high',
+            created: data.timestamp
+          })
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save plan');
+      }
+
+      const result = await response.json();
+      console.log('Plan saved successfully:', result);
+    } catch (error) {
+      console.error('Error saving AI plan:', error);
+      throw error;
+    }
+  };
+
   // AI Chat Action Handler
   const handleAIAction = async (action: string, data: any) => {
     try {
@@ -1105,6 +1146,12 @@ const Dashboard = () => {
         case 'refresh_data':
           // Refresh dashboard data after AI actions
           await fetchDashboardData();
+          break;
+
+        case 'add_to_debt_payoff':
+          // Add AI-generated plan to debt payoff page
+          await handleAddPlanToDebtPayoff(data);
+          setLeftSidebarTab('debt'); // Switch to debt tab to show the new plan
           break;
         
         default:
