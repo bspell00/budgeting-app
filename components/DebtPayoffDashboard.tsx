@@ -18,14 +18,14 @@ export default function DebtPayoffDashboard({ accounts }: DebtPayoffDashboardPro
   useEffect(() => {
     // Convert connected accounts to debt accounts (only negative balances = actual debt)
     const debts = accounts
-      .filter(account => account.accountType === 'credit' && account.balance < 0)
+      .filter(account => (account.accountType === 'credit' || account.accountType === 'loan') && account.balance < 0)
       .map(account => ({
         id: account.id,
         name: account.accountName,
         balance: Math.abs(account.balance), // Convert negative debt to positive amount
         minimumPayment: Math.max(25, Math.round(Math.abs(account.balance) * 0.02)), // 2% minimum or $25
-        interestRate: 18.99, // Default APR - user can modify
-        accountType: 'credit_card' as const
+        interestRate: account.accountType === 'loan' ? 6.5 : 18.99, // Default rates: loans 6.5%, credit cards 18.99%
+        accountType: account.accountType === 'loan' ? 'loan' as const : 'credit_card' as const
       }));
     
     setDebtAccounts(debts);

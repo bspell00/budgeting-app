@@ -282,7 +282,7 @@ export class AIFinancialAdvisor {
       .reduce((sum, a) => sum + Math.abs(a.balance), 0);
     
     const totalDebt = accounts
-      .filter(a => a.accountType === 'credit' && a.balance < 0)
+      .filter(a => (a.accountType === 'credit' || a.accountType === 'loan') && a.balance < 0)
       .reduce((sum, a) => sum + Math.abs(a.balance), 0);
 
     const debtUtilization = totalCredit > 0 ? Math.min(100, (totalDebt / totalCredit) * 100) : 100;

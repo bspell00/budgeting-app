@@ -1695,13 +1695,13 @@ const Dashboard = () => {
                     <p className="text-xs text-[#6B7280] mt-1">Plan your debt-free journey</p>
                   </div>
                   {/* Summary for actual debts only */}
-                  {accounts && accounts.filter(acc => acc.accountType === 'credit' && acc.balance > 0).length > 0 ? (
+                  {accounts && accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length > 0 ? (
                     <div className="p-3 bg-red-50 rounded-lg border border-red-200">
                       <p className="text-sm font-medium text-red-900">
-                        {accounts.filter(acc => acc.accountType === 'credit' && acc.balance > 0).length} debt account{accounts.filter(acc => acc.accountType === 'credit' && acc.balance > 0).length > 1 ? 's' : ''} to pay off
+                        {accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length} debt account{accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length > 1 ? 's' : ''} to pay off
                       </p>
                       <p className="text-xs text-red-700 mt-1">
-                        Total: {formatCurrency(accounts.filter(acc => acc.accountType === 'credit' && acc.balance > 0).reduce((sum, acc) => sum + acc.balance, 0))}
+                        Total: {formatCurrency(accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).reduce((sum, acc) => sum + Math.abs(acc.balance), 0))}
                       </p>
                     </div>
                   ) : (
@@ -1998,13 +1998,13 @@ const Dashboard = () => {
             {leftSidebarTab === 'debt' && (
               <DebtPayoffStrategies
                 debts={accounts
-                  .filter(acc => acc.accountType === 'credit' && acc.balance > 0) // Credit cards with debt (positive balance)
+                  .filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0) // Credit cards and loans with debt (negative balance indicates debt owed)
                   .map(acc => ({
                     id: acc.id,
                     accountName: acc.accountName,
-                    balance: acc.balance, // Positive balance represents debt owed
+                    balance: Math.abs(acc.balance), // Convert negative debt to positive amount for calculations
                     interestRate: 18.5, // Default rate - could be enhanced to store actual rates
-                    minimumPayment: Math.max(25, acc.balance * 0.02) // 2% minimum payment
+                    minimumPayment: Math.max(25, Math.abs(acc.balance) * 0.02) // 2% minimum payment
                   }))}
                 accounts={accounts} // Pass full account data for payment detection
                 transactions={transactions} // Pass transaction data for automatic tracking

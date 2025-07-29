@@ -127,7 +127,7 @@ export class AIConversationalAdvisor {
 
     // Calculate financial metrics
     const cashAccounts = accounts.filter(a => a.accountType === 'depository');
-    const debtAccounts = accounts.filter(a => a.accountType === 'credit' && a.balance < 0);
+    const debtAccounts = accounts.filter(a => (a.accountType === 'credit' || a.accountType === 'loan') && a.balance < 0);
     
     const currentCashBalance = cashAccounts.reduce((sum, a) => sum + a.balance, 0);
     const totalDebt = Math.abs(debtAccounts.reduce((sum, a) => sum + a.balance, 0));
