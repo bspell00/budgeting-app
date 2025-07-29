@@ -29,6 +29,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         metadata
       } = req.body;
 
+      // If this is a debt plan, deactivate any existing active debt plans
+      if (category === 'debt') {
+        await prisma.aIPlan.updateMany({
+          where: {
+            userId,
+            category: 'debt',
+            status: 'active'
+          },
+          data: {
+            status: 'paused'
+          }
+        });
+      }
+
       const newPlan = await prisma.aIPlan.create({
         data: {
           userId,

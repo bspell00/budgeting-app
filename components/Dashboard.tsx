@@ -12,7 +12,7 @@ import CategoryGroup from './CategoryGroup';
 import BudgetItem from './BudgetItem';
 import MoveMoneyPopover from './MoveMoneyPopover';
 import AssignMoneyFlyout from './AssignMoneyFlyout';
-import DebtPayoffDashboard from './DebtPayoffDashboard';
+import DebtPayoffStrategies from './DebtPayoffStrategies';
 import { useDashboard } from '../hooks/useDashboard';
 import { useTransactions } from '../hooks/useTransactions';
 import { useAccounts } from '../hooks/useAccounts';
@@ -1988,11 +1988,27 @@ const Dashboard = () => {
 
             {/* Debt Payoff Tab Content */}
             {leftSidebarTab === 'debt' && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                <DebtPayoffDashboard
-                  accounts={accounts}
-                />
-              </div>
+              <DebtPayoffStrategies
+                debts={accounts.filter(acc => acc.accountType === 'credit' && acc.balance < 0).map(acc => ({
+                  id: acc.id,
+                  accountName: acc.accountName,
+                  balance: Math.abs(acc.balance),
+                  interestRate: 18.5, // Default rate - could be enhanced to store actual rates
+                  minimumPayment: Math.max(25, Math.abs(acc.balance) * 0.02) // 2% minimum
+                }))}
+                onOpenAIChat={() => {
+                  // Switch to actions tab and trigger AI chat
+                  setLeftSidebarTab('actions');
+                  // Add a small delay to ensure tab switch completes
+                  setTimeout(() => {
+                    const aiChatButton = document.querySelector('[data-ai-chat]');
+                    if (aiChatButton instanceof HTMLElement) {
+                      aiChatButton.click();
+                    }
+                  }, 100);
+                }}
+                onRefreshData={refreshDashboard}
+              />
             )}
 
             {/* Accounts Tab Content */}
@@ -2413,7 +2429,9 @@ const Dashboard = () => {
       />
 
       {/* AI Chat Assistant */}
-      <AIChat onExecuteAction={handleAIAction} />
+      <div data-ai-chat>
+        <AIChat onExecuteAction={handleAIAction} />
+      </div>
     </div>
   );
 };
