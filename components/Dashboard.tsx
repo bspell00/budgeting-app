@@ -1080,28 +1080,27 @@ const Dashboard = () => {
   // Add AI plan to debt payoff page
   const handleAddPlanToDebtPayoff = async (data: any) => {
     try {
+      // Extract clean plan data from AI response
+      const extractedPlan = extractPlanFromAIResponse(data.planContent);
+      
       const response = await fetch('/api/ai-plans', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: 'AI-Generated Debt Payoff Plan',
-          description: data.planContent,
+          title: extractedPlan.title,
+          description: extractedPlan.summary,
           category: 'debt',
-          priority: 'high',
-          timeframe: 'medium',
-          estimatedImpact: 'significant',
-          steps: JSON.stringify([
-            'Review the AI-generated plan below',
-            'Adjust amounts based on your specific situation',
-            'Follow the recommended payment strategy',
-            'Monitor progress monthly'
-          ]),
+          priority: extractedPlan.priority,
+          timeframe: extractedPlan.timeframe,
+          estimatedImpact: extractedPlan.impact,
+          steps: JSON.stringify(extractedPlan.steps),
           metadata: JSON.stringify({
             source: 'ai_chat',
             confidence: 'high',
-            created: data.timestamp
+            created: data.timestamp,
+            originalResponse: data.planContent // Keep full response for reference
           })
         }),
       });
@@ -1116,6 +1115,88 @@ const Dashboard = () => {
       console.error('Error saving AI plan:', error);
       throw error;
     }
+  };
+
+  // Extract clean, actionable plan from verbose AI response
+  const extractPlanFromAIResponse = (content: string) => {
+    const lines = content.split('\n').filter(line => line.trim());
+    
+    // Extract key financial amounts
+    const amountRegex = /\$[\d,]+\.?\d*/g;
+    const amounts = content.match(amountRegex) || [];
+    
+    // Find debt balances mentioned
+    const debtMentions = lines.filter(line => 
+      /debt|balance|owe|payment|payoff/i.test(line) && /\$/.test(line)
+    );
+    
+    // Extract monthly payment recommendation
+    const monthlyPayment = content.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:monthly|per month|each month)/i)?.[1];
+    
+    // Extract timeline
+    const timelineMatch = content.match(/(\d+)\s*months?/i);
+    const timeline = timelineMatch ? `${timelineMatch[1]} months` : 'medium';
+    
+    // Extract strategy type
+    const isAvalanche = /avalanche|highest.+interest|high.+interest.+first/i.test(content);
+    const isSnowball = /snowball|smallest.+balance|small.+debt.+first/i.test(content);
+    const strategy = isAvalanche ? 'Debt Avalanche (Highest Interest First)' : 
+                    isSnowball ? 'Debt Snowball (Smallest Balance First)' : 
+                    'Custom Debt Strategy';
+    
+    // Build clean action steps
+    const steps = [];
+    
+    // Step 1: Strategy
+    steps.push(`Use ${strategy} approach`);
+    
+    // Step 2: Monthly payment
+    if (monthlyPayment) {
+      steps.push(`Allocate $${monthlyPayment} monthly toward debt payments`);
+    }
+    
+    // Step 3: Priority debts
+    const priorityDebt = debtMentions[0];
+    if (priorityDebt) {
+      const cleanDebt = priorityDebt.replace(/^\d+\.\s*/, '').replace(/[*#]/g, '').trim();
+      if (cleanDebt.length < 100) { // Only if it's a reasonable length
+        steps.push(`Focus first on: ${cleanDebt}`);
+      }
+    }
+    
+    // Step 4: Timeline
+    if (timelineMatch) {
+      steps.push(`Target completion: ${timeline}`);
+    }
+    
+    // Step 5: Monitoring
+    steps.push('Review and adjust monthly');
+    
+    // If we couldn't extract much, use fallback steps
+    if (steps.length < 3) {
+      return {
+        title: 'AI Debt Payoff Strategy',
+        summary: 'A customized debt payoff plan based on your financial situation.',
+        steps: [
+          'Review your current debt balances and interest rates',
+          'Prioritize high-interest debt or smallest balances',
+          'Set up consistent monthly payments above minimums',
+          'Track progress and adjust as needed'
+        ],
+        priority: 'high',
+        timeframe: 'medium',
+        impact: 'significant'
+      };
+    }
+    
+    return {
+      title: strategy,
+      summary: `Pay off debt in ${timeline} using strategic payments${monthlyPayment ? ` of $${monthlyPayment}/month` : ''}.`,
+      steps: steps,
+      priority: amounts.length > 3 ? 'high' : 'medium',
+      timeframe: timeline === 'medium' ? 'medium' : parseInt(timeline) > 12 ? 'long' : 'short',
+      impact: amounts.some(amt => parseInt(amt.replace(/[$,]/g, '')) > 5000) ? 'significant' : 'moderate'
+    };
   };
 
   // AI Chat Action Handler
