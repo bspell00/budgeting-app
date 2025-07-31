@@ -26,25 +26,25 @@ const LandingPage: React.FC = () => {
       icon: Brain,
       title: "Meet Finley, Your AI Financial Assistant",
       description: "Get personalized insights, spending recommendations, and debt payoff strategies powered by advanced AI that learns from your financial patterns.",
-      color: "text-[#aed274]"
+      color: "text-evergreen"
     },
     {
       icon: CreditCard,
       title: "Smart Credit Card Automation",
       description: "Automatically move money from spending categories to credit card payments. Never worry about forgetting to budget for credit card bills again.",
-      color: "text-purple-600"
+      color: "text-teal-midnight"
     },
     {
       icon: Target,
       title: "Zero-Based Budgeting",
       description: "Give every dollar a job with our proven zero-based budgeting system. See exactly where your money goes and take control of your finances.",
-      color: "text-blue-600"
+      color: "text-last-lettuce"
     },
     {
       icon: TrendingUp,
       title: "Real Bank Account Integration",
       description: "Connect your actual bank accounts via Plaid for automatic transaction sync. No more manual entry - your real financial data, automatically categorized.",
-      color: "text-emerald-600"
+      color: "text-evergreen"
     }
   ];
 
@@ -58,7 +58,7 @@ const LandingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
       {/* Header */}
-      <header className="relative z-10 bg-white/80 backdrop-blur-sm border-b border-gray-200">
+      <header className="relative z-10 bg-teal-midnight/95 backdrop-blur-sm border-b border-teal-midnight">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-3">
@@ -77,13 +77,13 @@ const LandingPage: React.FC = () => {
             <div className="flex items-center space-x-4">
               <button
                 onClick={handleSignIn}
-                className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
+                className="text-white/80 hover:text-white font-medium transition-colors"
               >
                 Sign In
               </button>
               <button
                 onClick={handleSignIn}
-                className="bg-[#aed274] text-white px-6 py-2 rounded-lg hover:bg-[#9bc267] transition-colors font-medium"
+                className="bg-evergreen text-white px-6 py-2 rounded-full hover:bg-[#003527] transition-colors font-medium"
               >
                 Get Started
               </button>
@@ -99,7 +99,7 @@ const LandingPage: React.FC = () => {
             <div>
               <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
                 Give Your Budget a Brain with 
-                <span className="text-[#aed274] block">AI-Powered Budgeting</span>
+                <span className="text-evergreen block">AI-Powered Budgeting</span>
               </h1>
               <p className="text-xl text-gray-600 mt-6 leading-relaxed">
                 Take control of your finances with intelligent automation, real bank integration, 
@@ -109,29 +109,29 @@ const LandingPage: React.FC = () => {
               <div className="mt-8 flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={handleSignIn}
-                  className="bg-[#aed274] text-white px-8 py-4 rounded-xl hover:bg-[#9bc267] transition-all duration-300 font-semibold text-lg flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
+                  className="bg-evergreen text-white px-8 py-4 rounded-full hover:bg-[#003527] transition-all duration-300 font-semibold text-lg flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
                 >
                   <span>Start Budgeting Free</span>
                   <ArrowRight className="w-5 h-5" />
                 </button>
                 <button
                   onClick={handleSignIn}
-                  className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-xl hover:border-[#aed274] hover:text-[#aed274] transition-all duration-300 font-semibold text-lg"
+                  className="border-2 border-gray-300 text-gray-700 px-8 py-4 rounded-full hover:border-evergreen hover:text-evergreen transition-all duration-300 font-semibold text-lg"
                 >
                   See Demo
                 </button>
               </div>
               <div className="mt-8 flex items-center space-x-6 text-sm text-gray-500">
                 <div className="flex items-center space-x-2">
-                  <Check className="w-4 h-4 text-[#aed274]" />
+                  <Check className="w-4 h-4 text-evergreen" />
                   <span>Free forever plan</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Check className="w-4 h-4 text-[#aed274]" />
+                  <Check className="w-4 h-4 text-evergreen" />
                   <span>Bank-level security</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Check className="w-4 h-4 text-[#aed274]" />
+                  <Check className="w-4 h-4 text-evergreen" />
                   <span>No credit card required</span>
                 </div>
               </div>
@@ -139,13 +139,13 @@ const LandingPage: React.FC = () => {
 
             {/* Hero Image/Visual */}
             <div className="relative">
-              <div className="bg-gradient-to-r from-[#aed274] to-[#9cc49c] rounded-3xl p-8 shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-500">
+              <div className="bg-gradient-to-r from-evergreen to-teal-midnight rounded-3xl p-8 shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-500">
                 <div className="bg-white rounded-2xl p-6 shadow-lg">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-900">Monthly Budget</h3>
                     <div className="flex items-center space-x-1">
-                      <Brain className="w-4 h-4 text-[#aed274]" />
-                      <span className="text-sm text-[#aed274] font-medium">Finley AI</span>
+                      <Brain className="w-4 h-4 text-evergreen" />
+                      <span className="text-sm text-evergreen font-medium">Finley AI</span>
                     </div>
                   </div>
                   
@@ -162,9 +162,9 @@ const LandingPage: React.FC = () => {
                       <span className="text-sm font-medium">Food</span>
                       <span className="text-gray-900 font-bold">$400</span>
                     </div>
-                    <div className="flex justify-between items-center p-3 bg-[#aed274]/10 rounded-lg border border-[#aed274]/20">
-                      <span className="text-sm font-medium text-[#aed274]">Emergency Fund</span>
-                      <span className="text-[#aed274] font-bold">$500</span>
+                    <div className="flex justify-between items-center p-3 bg-evergreen/10 rounded-lg border border-evergreen/20">
+                      <span className="text-sm font-medium text-evergreen">Emergency Fund</span>
+                      <span className="text-evergreen font-bold">$500</span>
                     </div>
                   </div>
                   
@@ -184,13 +184,13 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Stats Section */}
-      <section className="bg-[#e8717e] py-16">
+      <section className="bg-white-asparagus py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
               <div key={index} className="text-center">
-                <div className="text-3xl lg:text-4xl font-bold text-white mb-2">{stat.value}</div>
-                <div className="text-green-100 font-medium">{stat.label}</div>
+                <div className="text-3xl lg:text-4xl font-bold text-evergreen mb-2">{stat.value}</div>
+                <div className="text-evergreen-100 font-medium">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -229,13 +229,13 @@ const LandingPage: React.FC = () => {
       </section>
 
       {/* Finley AI Spotlight Section */}
-      <section className="py-24 bg-gradient-to-r from-[#aed274] to-[#9cc49c]">
+      <section className="py-24 bg-gradient-to-r from-last-lettuce to-evergreen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <div className="flex items-center space-x-3 mb-6">
                 <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                  <Brain className="w-7 h-7 text-[#aed274]" />
+                  <Brain className="w-7 h-7 text-last-lettuce" />
                 </div>
                 <div>
                   <h2 className="text-3xl font-bold text-white">Meet Finley</h2>
@@ -274,7 +274,7 @@ const LandingPage: React.FC = () => {
             <div className="bg-white rounded-3xl p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-[#aed274] rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-last-lettuce rounded-full flex items-center justify-center">
                     <Brain className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -287,7 +287,7 @@ const LandingPage: React.FC = () => {
 
               <div className="space-y-4 h-64 overflow-y-auto">
                 <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-[#aed274] rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 bg-last-lettuce rounded-full flex items-center justify-center flex-shrink-0">
                     <Brain className="w-4 h-4 text-white" />
                   </div>
                   <div className="bg-gray-100 rounded-2xl p-3 max-w-xs">
@@ -299,18 +299,18 @@ const LandingPage: React.FC = () => {
                   <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
                     <Users className="w-4 h-4 text-white" />
                   </div>
-                  <div className="bg-[#aed274] rounded-2xl p-3 max-w-xs">
+                  <div className="bg-last-lettuce rounded-2xl p-3 max-w-xs">
                     <p className="text-sm text-white">Yes, please! I want to save more for my vacation fund.</p>
                   </div>
                 </div>
 
                 <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8 bg-[#aed274] rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 bg-last-lettuce rounded-full flex items-center justify-center flex-shrink-0">
                     <Brain className="w-4 h-4 text-white" />
                   </div>
                   <div className="bg-gray-100 rounded-2xl p-3 max-w-xs">
                     <p className="text-sm text-gray-900">Perfect! I suggest moving $150 from your dining budget to vacation savings. You're currently 70% towards your goal - this will get you to 85%! 🎉</p>
-                    <button className="mt-2 bg-[#aed274] text-white px-3 py-1 rounded-lg text-xs font-medium">
+                    <button className="mt-2 bg-last-lettuce text-white px-3 py-1 rounded-full text-xs font-medium">
                       Let's Do It
                     </button>
                   </div>
@@ -333,7 +333,7 @@ const LandingPage: React.FC = () => {
           </p>
           <button
             onClick={handleSignIn}
-            className="bg-[#aed274] text-white px-8 py-4 rounded-xl hover:bg-[#9bc267] transition-all duration-300 font-semibold text-lg inline-flex items-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
+            className="bg-evergreen text-white px-8 py-4 rounded-full hover:bg-[#003527] transition-all duration-300 font-semibold text-lg inline-flex items-center space-x-2 shadow-lg hover:shadow-xl hover:scale-105"
           >
             <span>Get Started Free</span>
             <ArrowRight className="w-5 h-5" />
