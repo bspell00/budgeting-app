@@ -13,8 +13,10 @@ export interface EmailOptions {
 export async function sendEmail({ to, subject, html, from }: EmailOptions) {
   try {
     if (!process.env.RESEND_API_KEY) {
-      console.warn('RESEND_API_KEY not configured. Email would be sent to:', to);
-      return { success: false, error: 'Email service not configured' };
+      console.warn('⚠️ RESEND_API_KEY not configured. Email would be sent to:', to);
+      console.warn('📧 Email subject:', subject);
+      console.warn('🔧 Set RESEND_API_KEY environment variable to enable email sending');
+      return { success: false, error: 'Email service not configured - RESEND_API_KEY missing' };
     }
 
     const result = await resend.emails.send({

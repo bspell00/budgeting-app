@@ -43,8 +43,11 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // In production, add resetToken and resetTokenExpiry fields to User model
       storeResetToken(email, resetToken, resetTokenExpiry);
 
-      // Generate reset URL
-      const resetUrl = `${process.env.NEXTAUTH_URL}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+      // Generate reset URL - ensure we have a valid base URL
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3001';
+      const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+      
+      console.log('🔗 Generated reset URL:', resetUrl);
       
       // Send password reset email
       const emailResult = await sendEmail({
@@ -72,7 +75,21 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
   } catch (error) {
     console.error('Password reset error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    
+    // More detailed error for debugging in staging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Detailed error:', {
+      message: errorMessage,
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      environment: process.env.NODE_ENV,
+      hasResendKey: !!process.env.RESEND_API_KEY,
+      nextAuthUrl: process.env.NEXTAUTH_URL
+    });
+    
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    });
   }
 }
 

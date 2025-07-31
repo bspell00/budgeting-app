@@ -35,3 +35,7 @@ yarn-error.log*
 
 # Prisma
 prisma/migrations/
+
+# Setup and deployment guides with sensitive info
+HEROKU_SETUP.md
+EMAIL_SETUP.md
