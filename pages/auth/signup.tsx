@@ -57,7 +57,7 @@ export default function SignUp() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
       {/* Header */}
-      <header className="relative z-10 bg-white/80 backdrop-blur-sm border-b border-gray-200">
+      <header className="relative z-10 bg-teal-midnight/95 backdrop-blur-sm border-b border-teal-midnight">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <Link href="/" className="flex items-center space-x-3">
@@ -75,7 +75,7 @@ export default function SignUp() {
             </Link>
             <Link 
               href="/"
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
+              className="flex items-center space-x-2 text-white/80 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back to Home</span>
@@ -127,7 +127,7 @@ export default function SignUp() {
                     type="text"
                     autoComplete="name"
                     required
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-evergreen focus:border-evergreen transition-colors"
                     placeholder="Enter your full name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -150,7 +150,7 @@ export default function SignUp() {
                     type="email"
                     autoComplete="email"
                     required
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-evergreen focus:border-evergreen transition-colors"
                     placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -173,7 +173,7 @@ export default function SignUp() {
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#aed274] focus:border-[#aed274] transition-colors"
+                    className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-evergreen focus:border-evergreen transition-colors"
                     placeholder="Create a password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -196,7 +196,7 @@ export default function SignUp() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-[#aed274] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#9bc267] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#aed274] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                className="w-full bg-evergreen text-white py-3 px-4 rounded-full font-semibold hover:bg-[#003527] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-evergreen transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
               >
                 {isLoading ? (
                   <div className="flex items-center justify-center space-x-2">
@@ -215,18 +215,18 @@ export default function SignUp() {
                 Already have an account?{' '}
                 <Link 
                   href="/auth/signin" 
-                  className="font-medium text-[#aed274] hover:text-[#9bc267] transition-colors"
+                  className="font-medium text-evergreen hover:text-[#003527] transition-colors"
                 >
                   Sign in here
                 </Link>
               </p>
               <p className="text-xs text-gray-500 mt-4">
                 By creating an account, you agree to our{' '}
-                <button className="text-[#aed274] hover:text-[#9bc267] transition-colors">
+                <button className="text-evergreen hover:text-[#003527] transition-colors">
                   Terms of Service
                 </button>
                 {' '}and{' '}
-                <button className="text-[#aed274] hover:text-[#9bc267] transition-colors">
+                <button className="text-evergreen hover:text-[#003527] transition-colors">
                   Privacy Policy
                 </button>
               </p>
@@ -238,15 +238,15 @@ export default function SignUp() {
             <p className="text-sm text-gray-500 mb-4">Join thousands of users managing their finances smarter</p>
             <div className="flex justify-center space-x-8 text-xs text-gray-400">
               <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-evergreen rounded-full"></div>
                 <span>Bank-level security</span>
               </div>
               <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-evergreen rounded-full"></div>
                 <span>256-bit encryption</span>
               </div>
               <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-evergreen rounded-full"></div>
                 <span>SOC 2 compliant</span>
               </div>
             </div>
