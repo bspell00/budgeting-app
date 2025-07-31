@@ -137,10 +137,10 @@ export default function AssignMoneyFlyout({
       
       {/* Flyout */}
       <div 
-        className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-xl"
+        className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-xl overflow-hidden"
         style={{
-          top: position.top,
-          left: position.left,
+          top: Math.min(position.top, window.innerHeight - 520), // Ensure it doesn't go off-screen
+          left: Math.min(position.left, window.innerWidth - 420), // Ensure it doesn't go off-screen
           width: '400px',
           maxHeight: '500px',
         }}
@@ -165,23 +165,10 @@ export default function AssignMoneyFlyout({
           {/* Show information when in overspending mode */}
           {isOverspendingMode && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <h4 className="text-sm font-medium text-red-800 mb-2">Overbudgeted - Reduce Budget Amounts</h4>
-              <p className="text-xs text-red-700 mb-2">
-                You've budgeted more money than you have available. Select a budget below and enter an amount to reduce it by. This will free up money for "To Be Budgeted".
+              <h4 className="text-sm font-medium text-red-800 mb-2">Overbudgeted</h4>
+              <p className="text-xs text-red-700">
+                Reduce budget amounts to free up money for "To Be Budgeted".
               </p>
-              {overspentBudgets.length > 0 && (
-                <div>
-                  <div className="text-xs text-red-600 font-medium mb-1">Also overspent categories:</div>
-                  <div className="space-y-1">
-                    {overspentBudgets.map((budget) => (
-                      <div key={budget.id} className="flex justify-between text-xs">
-                        <span className="text-red-700">{budget.name}</span>
-                        <span className="text-red-600 font-medium">-{formatCurrency(budget.overspentAmount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 

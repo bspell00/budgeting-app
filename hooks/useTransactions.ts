@@ -5,11 +5,25 @@ const fetcher = (url: string) => fetch(url).then(res => res.json());
 export function useTransactions(accountId?: string) {
   const key = accountId ? `/api/transactions?accountId=${accountId}` : '/api/transactions';
   
+  console.log('🔍 useTransactions called with:', { 
+    accountId: accountId, 
+    key: key,
+    accountIdType: typeof accountId 
+  });
+  
   const { data, error, isLoading } = useSWR(key, fetcher, {
     refreshInterval: 15000, // Refresh every 15 seconds
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
     dedupingInterval: 2000,
+  });
+  
+  console.log('🔍 useTransactions SWR result:', { 
+    key: key,
+    dataExists: !!data,
+    transactionCount: data?.transactions?.length || 0,
+    error: error,
+    isLoading: isLoading 
   });
 
   // Optimistic update for transaction category changes

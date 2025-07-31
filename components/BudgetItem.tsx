@@ -16,6 +16,8 @@ interface BudgetItemProps {
   onEdit: (id: string, updates: { name?: string; amount?: number; category?: string }) => void;
   onDelete: (id: string) => void;
   onInitiateMoveMoney?: (budget: any, event?: MouseEvent) => void;
+  onSelect?: (budget: any) => void;
+  isSelected?: boolean;
   formatCurrency: (amount: number) => string;
   getStatusColor: (status: string) => string;
   isDragging?: boolean;
@@ -27,6 +29,8 @@ export default function BudgetItem({
   onEdit, 
   onDelete, 
   onInitiateMoveMoney,
+  onSelect,
+  isSelected = false,
   formatCurrency, 
   getStatusColor,
   isDragging = false,
@@ -128,8 +132,11 @@ export default function BudgetItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center px-2 sm:px-4 py-2 border-b border-found-divider last:border-b-0 hover:bg-found-divider transition-colors group ${
+      onClick={() => onSelect?.(budget)}
+      className={`flex items-center px-2 sm:px-4 py-2 border-b border-found-divider last:border-b-0 hover:bg-found-divider transition-colors group cursor-pointer ${
         isDragging ? 'opacity-50 bg-found-surface shadow-lg rounded-lg' : ''
+      } ${
+        isSelected ? 'bg-last-lettuce bg-opacity-20 border-last-lettuce' : ''
       }`}
     >
       {/* Drag Handle */}

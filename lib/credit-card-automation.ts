@@ -464,7 +464,7 @@ export class CreditCardAutomation {
           where: {
             userId: userId,
             name: `${creditCardName} Payment`,
-            category: 'Credit Card Payment'
+            category: 'Credit Card Payments'
           }
         });
 
@@ -474,7 +474,7 @@ export class CreditCardAutomation {
             data: {
               userId: userId,
               name: `${creditCardName} Payment`,
-              category: 'Credit Card Payment',
+              category: 'Credit Card Payments',
               amount: 0,
               spent: 0,
               month: budget.month,

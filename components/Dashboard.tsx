@@ -50,6 +50,7 @@ import AccountClosureModal from './AccountClosureModal';
 import AIAdvisorDashboard from './AIAdvisorDashboard';
 import TransactionAlertBanner from './TransactionAlertBanner';
 import AIChat from './AIChat';
+import FinleySuggests from './FinleySuggests';
 
 const Dashboard = () => {
   const { data: session } = useSession();
@@ -59,6 +60,7 @@ const Dashboard = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
+  const [selectedBudget, setSelectedBudget] = useState<any>(null);
   const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
   const [leftSidebarTab, setLeftSidebarTab] = useState('budget');
   const [activeDragItem, setActiveDragItem] = useState<any>(null);
@@ -81,6 +83,10 @@ const Dashboard = () => {
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'unapproved' | 'uncategorized'>('all');
   const [localLoading, setLocalLoading] = useState(false);
   
+  // Local state for optimistic updates (separate from SWR data)
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  
   // SWR hooks for real-time data
   const { 
     data: dashboardData, 
@@ -101,7 +107,7 @@ const Dashboard = () => {
     deleteTransactionOptimistic,
     toggleClearedOptimistic,
     refresh: refreshTransactions
-  } = useTransactions(selectedAccount?.id);
+  } = useTransactions(leftSidebarTab === 'transactions' ? undefined : selectedAccount?.id); // Pass undefined for all transactions on Transactions tab
   
   const {
     data: accountsData,
@@ -111,9 +117,25 @@ const Dashboard = () => {
     refresh: refreshAccounts
   } = useAccounts();
   
-  // Derived state from SWR data
-  const transactions = transactionsData?.transactions || [];
-  const accounts = accountsData || [];
+  // Use local state for optimistic updates on individual accounts, but always use SWR data for all transactions
+  const finalTransactions = leftSidebarTab === 'transactions' 
+    ? (transactionsData?.transactions || []) // Always use fresh data for all transactions view
+    : (transactions.length > 0 ? transactions : (transactionsData?.transactions || [])); // Use optimistic updates for individual account views
+  const finalAccounts = accounts.length > 0 ? accounts : (accountsData || []);
+  
+  // Debug logging
+  React.useEffect(() => {
+    if (leftSidebarTab === 'transactions') {
+      console.log('🔍 Transactions Tab Debug:', {
+        leftSidebarTab: leftSidebarTab,
+        transactionsDataExists: !!transactionsData,
+        transactionsDataTransactionCount: transactionsData?.transactions?.length || 0,
+        finalTransactionsCount: finalTransactions.length,
+        accountsCount: finalAccounts.length,
+        transactionsError: transactionsError
+      });
+    }
+  }, [leftSidebarTab, transactionsData, finalTransactions.length, finalAccounts.length, transactionsError]);
   const loading = dashboardLoading || accountsLoading;
   const error = dashboardError || accountsError || transactionsError;
   
@@ -141,17 +163,17 @@ const Dashboard = () => {
 
   // Detection logic for transaction alerts
   const unapprovedTransactions = React.useMemo(() => {
-    return transactions.filter((transaction: any) => !transaction.approved);
-  }, [transactions]);
+    return finalTransactions.filter((transaction: any) => !transaction.approved);
+  }, [finalTransactions]);
 
   const uncategorizedTransactions = React.useMemo(() => {
     const uncategorizedCategories = ['Uncategorized', 'Misc', 'Other', 'Entertainment', ''];
-    return transactions.filter((transaction: any) => 
+    return finalTransactions.filter((transaction: any) => 
       !transaction.category || 
       uncategorizedCategories.includes(transaction.category) ||
       transaction.category.trim() === ''
     );
-  }, [transactions]);
+  }, [finalTransactions]);
 
   // Handlers for banner quick actions
   const handleViewUnapproved = () => {
@@ -168,18 +190,18 @@ const Dashboard = () => {
   const filteredTransactions = React.useMemo(() => {
     switch (transactionFilter) {
       case 'unapproved':
-        return transactions.filter(transaction => !transaction.approved);
+        return finalTransactions.filter(transaction => !transaction.approved);
       case 'uncategorized':
         const uncategorizedCategories = ['Uncategorized', 'Misc', 'Other', 'Entertainment', ''];
-        return transactions.filter(transaction => 
+        return finalTransactions.filter(transaction => 
           !transaction.category || 
           uncategorizedCategories.includes(transaction.category) ||
           transaction.category.trim() === ''
         );
       default:
-        return transactions;
+        return finalTransactions;
     }
-  }, [transactions, transactionFilter]);
+  }, [finalTransactions, transactionFilter]);
   
   const fetchDashboardData = async (showLoading = true) => {
     try {
@@ -216,21 +238,20 @@ const Dashboard = () => {
           if (response.ok) {
             console.log('✅ Default categories created successfully');
             // Refetch dashboard data to get the new categories
-            const updatedDashboardResponse = await fetch('/api/dashboard');
-            if (updatedDashboardResponse.ok) {
-              const updatedDashboardData = await updatedDashboardResponse.json();
-              setDashboardData(updatedDashboardData);
-            }
+            await refreshDashboard();
           }
         } catch (error) {
           console.error('❌ Failed to create default categories:', error);
         }
-      } else {
-        setDashboardData(dashboardData);
       }
       
-      setTransactions(transactionsData);
-      setAccounts(accountsData);
+      // Initialize local state from SWR data
+      if (transactionsData?.transactions) {
+        setTransactions(transactionsData.transactions);
+      }
+      if (accountsData) {
+        setAccounts(accountsData);
+      }
       
       // Get unique categories for the dropdown
       const categoryNames = dashboardData.categories?.map((group: any) => group.name as string) || [];
@@ -247,6 +268,15 @@ const Dashboard = () => {
   };
 
   // No need for manual refresh functions - SWR handles this automatically
+  
+  // Hot reload function to refresh all data
+  const hotReload = async () => {
+    await Promise.all([
+      refreshDashboard(),
+      refreshTransactions(),
+      refreshAccounts()
+    ]);
+  };
   
   const fetchAISuggestions = async () => {
     try {
@@ -363,7 +393,7 @@ const Dashboard = () => {
       const response = await fetch(`/api/transactions?accountId=${accountId}`);
       if (response.ok) {
         const accountTransactionsData = await response.json();
-        setAccountTransactions(accountTransactionsData);
+        setAccountTransactions(accountTransactionsData.transactions || []);
       }
     } catch (error) {
       console.error('Error fetching account transactions:', error);
@@ -475,32 +505,57 @@ const Dashboard = () => {
     }
   };
 
-  const handleMoveMoney = async (targetBudgetId: string, amount: number) => {
+  const handleMoveMoney = async (sourceBudgetId: string, amount: number) => {
     if (!moveMoneySource) return;
     
     try {
       // Close popover immediately for better UX
       setShowMoveMoneyPopover(false);
       
-      // Get current amounts for both budgets
-      const sourceBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
-        .find((budget: any) => budget.id === moveMoneySource.id);
-      const targetBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
-        .find((budget: any) => budget.id === targetBudgetId);
-      
-      if (!sourceBudget || !targetBudget) {
-        throw new Error('Source or target budget not found');
+      // Special handling for goal funding mode
+      if (moveMoneySource.id === '__GOAL_FUNDING__') {
+        // In goal funding mode, sourceBudgetId is actually the source, 
+        // and moveMoneySource.targetGoalBudgetId is the target
+        const sourceBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+          .find((budget: any) => budget.id === sourceBudgetId);
+        const targetBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+          .find((budget: any) => budget.id === moveMoneySource.targetGoalBudgetId);
+        
+        if (!sourceBudget || !targetBudget) {
+          throw new Error('Source or target budget not found');
+        }
+        
+        // Calculate new amounts
+        const newSourceAmount = Math.max(0, sourceBudget.budgeted - amount);
+        const newTargetAmount = targetBudget.budgeted + amount;
+        
+        // Use SWR optimistic updates for both budgets
+        await Promise.all([
+          updateBudgetOptimistic(sourceBudgetId, { amount: newSourceAmount }),
+          updateBudgetOptimistic(moveMoneySource.targetGoalBudgetId, { amount: newTargetAmount })
+        ]);
+        
+      } else {
+        // Normal budget-to-budget transfer
+        const sourceBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+          .find((budget: any) => budget.id === moveMoneySource.id);
+        const targetBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+          .find((budget: any) => budget.id === sourceBudgetId); // In normal mode, this is actually the target
+        
+        if (!sourceBudget || !targetBudget) {
+          throw new Error('Source or target budget not found');
+        }
+        
+        // Calculate new amounts
+        const newSourceAmount = Math.max(0, sourceBudget.budgeted - amount);
+        const newTargetAmount = targetBudget.budgeted + amount;
+        
+        // Use SWR optimistic updates for both budgets
+        await Promise.all([
+          updateBudgetOptimistic(moveMoneySource.id, { amount: newSourceAmount }),
+          updateBudgetOptimistic(sourceBudgetId, { amount: newTargetAmount })
+        ]);
       }
-      
-      // Calculate new amounts
-      const newSourceAmount = Math.max(0, sourceBudget.budgeted - amount);
-      const newTargetAmount = targetBudget.budgeted + amount;
-      
-      // Use SWR optimistic updates for both budgets
-      await Promise.all([
-        updateBudgetOptimistic(moveMoneySource.id, { amount: newSourceAmount }),
-        updateBudgetOptimistic(targetBudgetId, { amount: newTargetAmount })
-      ]);
       
       // Clear source after successful transfer
       setMoveMoneySource(null);
@@ -511,6 +566,36 @@ const Dashboard = () => {
       // SWR automatically handles rollback on errors
       alert('Failed to move money. Please try again.');
     }
+  };
+
+  // Special handler for moving money TO a goal (reverses the typical flow)
+  const handleMoveMoneyToGoal = (goalBudgetId: string, goalName: string, event: MouseEvent) => {
+    // Set the goal's budget as the "target" but use a special mode
+    const goalBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
+      .find((budget: any) => budget.id === goalBudgetId);
+      
+    if (!goalBudget) return;
+    
+    // Set position for popover (center of screen if no event coordinates)
+    setMoveMoneyPosition({
+      top: event.clientY || window.innerHeight / 2,
+      left: event.clientX || window.innerWidth / 2
+    });
+    
+    // Create a dummy source to trigger the move money modal, but in "fund goal" mode
+    setMoveMoneySource({
+      id: '__GOAL_FUNDING__', // Special ID to indicate this is goal funding mode
+      name: `Fund "${goalName}"`,
+      available: 0,
+      targetGoalBudgetId: goalBudgetId // Store the actual goal budget ID
+    });
+    
+    setShowMoveMoneyPopover(true);
+  };
+
+  // Handle budget selection for goal management
+  const handleBudgetSelect = (budget: any) => {
+    setSelectedBudget(budget);
   };
 
   const handleTransactionCategoryUpdate = async (transactionId: string, newCategory: string) => {
@@ -579,23 +664,44 @@ const Dashboard = () => {
 
   const handleCreateGoal = async (goalData: any) => {
     try {
+      // If a budget is selected, create the goal linked to that budget
+      const goalPayload = selectedBudget ? {
+        ...goalData,
+        linkedBudgetId: selectedBudget.id,
+        linkedBudgetName: selectedBudget.name
+      } : goalData;
+
       const response = await fetch('/api/goals', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(goalData),
+        body: JSON.stringify(goalPayload),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create goal');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create goal');
       }
 
-      // Refresh dashboard data to show new goal
-      refreshDashboard();
+      const newGoal = await response.json();
+      console.log('✅ Goal created successfully:', newGoal);
+
+      // Refresh all dashboard data to show new goal
+      await refreshDashboard();
+      
+      // Close the modal
+      setShowGoalModal(false);
+      
+      // Show success message 
+      if (selectedBudget) {
+        alert(`Goal "${goalData.name}" created for budget "${selectedBudget.name}"! The goal will track this budget's progress toward your target.`);
+      } else {
+        alert(`Goal "${goalData.name}" created successfully! A corresponding budget has been added to track your progress.`);
+      }
     } catch (error) {
       console.error('Error creating goal:', error);
-      alert('Failed to create goal. Please try again.');
+      alert(`Failed to create goal: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -1254,9 +1360,9 @@ const Dashboard = () => {
           </div>
           <p className="text-gray-700 font-halyard font-bold animate-pulse">Loading your financial dashboard...</p>
           <div className="mt-4 flex justify-center space-x-1">
-            <div className="w-2 h-2 bg-[#aed274] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-2 h-2 bg-[#aed274] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-2 h-2 bg-[#aed274] rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <div className="w-2 h-2 bg-evergreen rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 bg-evergreen rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 bg-evergreen rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
           </div>
         </div>
       </div>
@@ -1267,7 +1373,7 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6">
             <h2 className="text-red-800 font-semibold mb-2">Error Loading Dashboard</h2>
             <p className="text-red-600">{error}</p>
           </div>
@@ -1348,38 +1454,35 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-orange-50/30 to-gray-100 flex flex-col">
+    <div className="min-h-screen bg-dipped-cream flex flex-col">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-white/20 shadow-lg px-6 py-4">
+      <header className="bg-teal-midnight border-b border-teal-midnight/20 shadow-lg px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <img 
               src="/img/PNG/logo_2.png" 
               alt="Logo" 
-              className="h-12 w-auto"
+              className="h-10 w-auto"
             />
-            <p className="text-found-text opacity-60 font-halyard-micro font-medium tracking-wide">
+            <p className="text-white opacity-60 font-halyard-micro font-medium tracking-wide">
               {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </p>
           </div>
           <div className="flex items-center space-x-1 sm:space-x-3 overflow-x-auto">
             <button
               onClick={() => setShowAccountTypeModal(true)}
-              className="flex items-center space-x-1 sm:space-x-2 text-white px-2 sm:px-4 py-2 rounded-xl transition-all duration-300 text-sm font-medium flex-shrink-0 shadow-lg hover:shadow-xl hover:scale-105 border border-white/20"
-              style={{ backgroundColor: '#aed274' }}
-              onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#9bc267'}
-              onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#aed274'}
+              className="flex items-center space-x-1 sm:space-x-2 text-white px-2 sm:px-4 py-2 rounded-full transition-all duration-300 text-sm font-medium flex-shrink-0 shadow-lg hover:shadow-xl hover:scale-105 border border-white/20 bg-evergreen hover:bg-coach-green"
             >
               <PlusCircle className="w-4 h-4" />
               <span className="font-halyard font-bold">Add Account</span>
             </button>
             <button
               onClick={handleSignOut}
-              className="bg-gray-600/80 backdrop-blur-sm text-white px-3 py-2 rounded-xl hover:bg-gray-700/90 hover:shadow-md transition-all duration-300 hover:scale-105 text-sm border border-gray-500/30"
+              className="bg-white-asparagus text-gray-900 px-3 py-2 rounded-full hover:bg-white-asparagus/80 hover:shadow-md transition-all duration-300 hover:scale-105 text-sm border border-white-asparagus/50"
             >
               <span className="font-halyard font-medium">Sign Out</span>
             </button>
-            <button className="p-2 text-found-text opacity-60 hover:text-found-text hover:opacity-100 rounded-xl hover:bg-white/50 hover:backdrop-blur-sm hover:shadow-md transition-all duration-300 hover:scale-110 border border-transparent hover:border-white/30">
+            <button className="p-2 text-white opacity-60 hover:text-white hover:opacity-100 rounded-full hover:bg-white/20 hover:backdrop-blur-sm hover:shadow-md transition-all duration-300 hover:scale-110 border border-transparent hover:border-white/30">
               <Settings className="w-5 h-5" />
             </button>
           </div>
@@ -1405,7 +1508,7 @@ const Dashboard = () => {
               onClick={() => setLeftSidebarTab('budget')}
               className={`flex items-center space-x-4 px-6 py-4 text-base font-normal transition-colors ${
                 leftSidebarTab === 'budget'
-                  ? 'text-[#151418] bg-[#aed274] bg-opacity-10'
+                  ? 'text-[#151418] bg-evergreen bg-opacity-10'
                   : 'text-[#9CA3AF] hover:text-[#151418] hover:bg-[#EFF2F0]'
               }`}
             >
@@ -1416,7 +1519,7 @@ const Dashboard = () => {
               onClick={() => setLeftSidebarTab('transactions')}
               className={`flex items-center space-x-4 px-6 py-4 text-base font-normal transition-colors ${
                 leftSidebarTab === 'transactions'
-                  ? 'text-[#151418] bg-[#aed274] bg-opacity-10'
+                  ? 'text-[#151418] bg-evergreen bg-opacity-10'
                   : 'text-[#9CA3AF] hover:text-[#151418] hover:bg-[#EFF2F0]'
               }`}
             >
@@ -1427,7 +1530,7 @@ const Dashboard = () => {
               onClick={() => setLeftSidebarTab('debt')}
               className={`flex items-center space-x-4 px-6 py-4 text-base font-normal transition-colors ${
                 leftSidebarTab === 'debt'
-                  ? 'text-[#151418] bg-[#aed274] bg-opacity-10'
+                  ? 'text-[#151418] bg-evergreen bg-opacity-10'
                   : 'text-[#9CA3AF] hover:text-[#151418] hover:bg-[#EFF2F0]'
               }`}
             >
@@ -1438,7 +1541,7 @@ const Dashboard = () => {
               onClick={() => setLeftSidebarTab('ai-advisor')}
               className={`flex items-center space-x-4 px-6 py-4 text-base font-normal transition-colors ${
                 leftSidebarTab === 'ai-advisor'
-                  ? 'text-[#151418] bg-gradient-to-r from-purple-100 to-blue-100'
+                  ? 'text-[#151418] bg-last-lettuce bg-opacity-20'
                   : 'text-[#9CA3AF] hover:text-[#151418] hover:bg-[#EFF2F0]'
               }`}
             >
@@ -1471,10 +1574,10 @@ const Dashboard = () => {
                 }}
               >
                 <button 
-                  className="w-full flex items-center space-x-2 p-3 text-white rounded-xl transition-all duration-300 mb-4 shadow-lg hover:shadow-xl hover:scale-[1.02] border border-white/10"
-                  style={{ backgroundColor: '#aed274' }}
-                  onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#9bc267'}
-                  onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#aed274'}
+                  className="w-full flex items-center space-x-2 p-3 text-white rounded-full transition-all duration-300 mb-4 shadow-lg hover:shadow-xl hover:scale-[1.02] border border-white/10"
+                  style={{ backgroundColor: '#125B49' }}
+                  onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#003527'}
+                  onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#125B49'}
                 >
                   <PlusCircle className="w-4 h-4" />
                   <span className="font-halyard font-bold">Add Account</span>
@@ -1494,7 +1597,7 @@ const Dashboard = () => {
                         {accounts.filter(account => account.accountType === 'depository').map((account) => (
                           <div 
                             key={account.id} 
-                            className={`group px-4 py-3 rounded-xl transition-all duration-300 cursor-pointer ${
+                            className={`group px-4 py-3 rounded-full transition-all duration-300 cursor-pointer ${
                               selectedAccount?.id === account.id 
                                 ? 'bg-white/80 backdrop-blur-sm text-[#151418] shadow-lg border border-orange-200/50' 
                                 : 'text-[#6B7280] hover:bg-white/50 hover:backdrop-blur-sm hover:text-[#151418] hover:shadow-md hover:scale-[1.02] border border-transparent hover:border-white/30'
@@ -1557,7 +1660,7 @@ const Dashboard = () => {
                         {accounts.filter(account => account.accountType === 'credit').map((account) => (
                           <div 
                             key={account.id} 
-                            className={`group px-4 py-3 rounded-xl transition-all duration-300 cursor-pointer ${
+                            className={`group px-4 py-3 rounded-full transition-all duration-300 cursor-pointer ${
                               selectedAccount?.id === account.id 
                                 ? 'bg-white/80 backdrop-blur-sm text-[#151418] shadow-lg border border-orange-200/50' 
                                 : 'text-[#6B7280] hover:bg-white/50 hover:backdrop-blur-sm hover:text-[#151418] hover:shadow-md hover:scale-[1.02] border border-transparent hover:border-white/30'
@@ -1634,13 +1737,13 @@ const Dashboard = () => {
               <div>
                 <h3 className="text-lg font-semibold text-[#151418] mb-4">Budget Overview</h3>
                 <div className="space-y-3">
-                  <div className="p-3 bg-[#FFFFFF] rounded-lg border border-[#EFF2F0]">
+                  <div className="p-3 bg-[#FFFFFF] rounded-xl border border-[#EFF2F0]">
                     <p className="text-sm text-[#151418] font-medium">Quick Stats</p>
                     <p className="text-xs text-[#6B7280] mt-1">View category groups in main content</p>
                   </div>
                   <button
                     onClick={() => setShowBudgetModal(true)}
-                    className="w-full flex items-center space-x-2 p-3 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
+                    className="w-full flex items-center space-x-2 p-3 bg-evergreen text-white rounded-full hover:bg-[#003527] transition-colors"
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>Add Budget Line</span>
@@ -1655,14 +1758,14 @@ const Dashboard = () => {
                   <h3 className="text-lg font-semibold text-[#151418]">Recent Transactions</h3>
                   <button
                     onClick={() => {/* No modal needed */}}
-                    className="text-[#e8717e] hover:text-[#d65e6a] text-sm font-medium"
+                    className="text-evergreen hover:text-coach-green text-sm font-medium"
                   >
                     Add
                   </button>
                 </div>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                   {dashboardData.recentTransactions && dashboardData.recentTransactions.length > 0 ? dashboardData.recentTransactions.map((transaction: any, index: number) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                       <div>
                         <p className="font-medium text-gray-900">{transaction.name}</p>
                         <p className="text-sm text-gray-600">{transaction.category} • {transaction.date}</p>
@@ -1690,13 +1793,13 @@ const Dashboard = () => {
               <div>
                 <h3 className="text-lg font-semibold text-[#151418] mb-4">Debt Payoff</h3>
                 <div className="space-y-3">
-                  <div className="p-3 bg-[#FFFFFF] rounded-lg border border-[#EFF2F0]">
+                  <div className="p-3 bg-[#FFFFFF] rounded-xl border border-[#EFF2F0]">
                     <p className="text-sm text-[#151418] font-medium">Debt Payoff Tools</p>
                     <p className="text-xs text-[#6B7280] mt-1">Plan your debt-free journey</p>
                   </div>
                   {/* Summary for actual debts only */}
                   {accounts && accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length > 0 ? (
-                    <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="p-3 bg-red-50 rounded-xl border border-red-200">
                       <p className="text-sm font-medium text-red-900">
                         {accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length} debt account{accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length > 1 ? 's' : ''} to pay off
                       </p>
@@ -1718,7 +1821,7 @@ const Dashboard = () => {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Chart Types</h3>
                 <div className="space-y-3">
-                  <div className="p-3 bg-indigo-50 rounded-lg">
+                  <div className="p-3 bg-indigo-50 rounded-xl">
                     <p className="text-sm text-indigo-600 font-medium">6 Chart Types Available</p>
                     <p className="text-xs text-indigo-500 mt-1">Switch tabs in main content to explore</p>
                   </div>
@@ -1797,7 +1900,7 @@ const Dashboard = () => {
                             }
                           }}
                           disabled={!isOverbudgeted && (dashboardData.toBeAssigned || 0) <= 0}
-                          className={`flex items-center space-x-3 px-6 py-3 rounded-lg transition-all duration-200 ${
+                          className={`flex items-center space-x-3 px-6 py-3 rounded-full transition-all duration-200 ${
                             isOverbudgeted
                               ? 'bg-red-50 hover:bg-red-100 text-red-600 hover:scale-105 cursor-pointer border border-red-200 shadow-sm hover:shadow-md'
                               : (dashboardData.toBeAssigned || 0) > 0 
@@ -1852,21 +1955,45 @@ const Dashboard = () => {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Category Groups</h2>
                 <div className="flex items-center space-x-3">
-                  <button
-                    onClick={() => setShowProgressBars(!showProgressBars)}
-                    className={`flex items-center space-x-2 px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      showProgressBars 
-                        ? 'bg-[#aed274] bg-opacity-20 text-[#aed274] hover:bg-opacity-30' 
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                    title={showProgressBars ? 'Hide progress bars' : 'Show progress bars'}
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    <span>{showProgressBars ? 'Hide Bars' : 'Show Bars'}</span>
-                  </button>
+                  {/* Progress Bars Toggle - Pill Style */}
+                  <div className="flex items-center space-x-2">
+                    <BarChart3 className="w-4 h-4 text-gray-600" />
+                    <button
+                      onClick={() => setShowProgressBars(!showProgressBars)}
+                      className={`relative inline-flex h-8 w-28 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none ${
+                        showProgressBars ? 'bg-last-lettuce' : 'bg-gray-300'
+                      }`}
+                      title={showProgressBars ? 'Hide progress bars' : 'Show progress bars'}
+                    >
+                      {/* Background sliding pill */}
+                      <span
+                        className={`absolute top-1 bottom-1 w-14 bg-white rounded-full shadow-sm transition-all duration-300 ease-in-out ${
+                          showProgressBars ? 'right-1' : 'left-1'
+                        }`}
+                      />
+                      
+                      {/* Show text */}
+                      <span
+                        className={`absolute left-3 text-xs font-medium transition-colors duration-300 ${
+                          showProgressBars ? 'text-white' : 'text-gray-600'
+                        }`}
+                      >
+                        Show
+                      </span>
+                      
+                      {/* Hide text */}
+                      <span
+                        className={`absolute right-3 text-xs font-medium transition-colors duration-300 ${
+                          showProgressBars ? 'text-gray-600' : 'text-white'
+                        }`}
+                      >
+                        Hide
+                      </span>
+                    </button>
+                  </div>
                   <button 
                     onClick={() => setShowBudgetModal(true)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
+                    className="flex items-center space-x-2 px-4 py-2 bg-evergreen text-white rounded-full hover:bg-[#003527] transition-colors"
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>Add Budget Line</span>
@@ -1902,6 +2029,8 @@ const Dashboard = () => {
                     onEditBudget={handleEditBudget}
                     onDeleteBudget={handleDeleteBudget}
                     onInitiateMoveMoney={handleInitiateMoveMoney}
+                    onSelectBudget={handleBudgetSelect}
+                    selectedBudgetId={selectedBudget?.id}
                     showProgressBars={showProgressBars}
                   />
                 ))}
@@ -1941,7 +2070,7 @@ const Dashboard = () => {
                     <h2 className="text-lg font-semibold text-gray-900">All Transactions</h2>
                     <button
                       onClick={() => {/* No modal needed */}}
-                      className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2 bg-evergreen text-white rounded-full hover:bg-[#003527] transition-colors"
                     >
                       <PlusCircle className="w-4 h-4" />
                       <span>Add Transaction</span>
@@ -1983,7 +2112,7 @@ const Dashboard = () => {
                     onFlagSingleTransaction={handleFlagSingleTransaction}
                     onMoveTransactions={handleMoveTransactions}
                     onApproveTransactions={handleApproveTransactions}
-                    accounts={accounts}
+                    accounts={finalAccounts}
                     categories={dashboardData?.categories?.flatMap((group: any) => 
                       group.budgets?.map((budget: any) => budget.name) || []
                     ) || []}
@@ -1998,16 +2127,26 @@ const Dashboard = () => {
             {leftSidebarTab === 'debt' && (
               <DebtPayoffStrategies
                 debts={accounts
-                  .filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0) // Credit cards and loans with debt (negative balance indicates debt owed)
+                  .filter(acc => {
+                    // Credit cards: always show if balance > 0 (Plaid reports debt as positive balance)
+                    if (acc.accountType === 'credit') {
+                      return acc.balance > 0;
+                    }
+                    // Loans: show if balance < 0 (traditional debt accounting)
+                    if (acc.accountType === 'loan') {
+                      return acc.balance < 0;
+                    }
+                    return false;
+                  })
                   .map(acc => ({
                     id: acc.id,
                     accountName: acc.accountName,
-                    balance: Math.abs(acc.balance), // Convert negative debt to positive amount for calculations
+                    balance: acc.accountType === 'credit' ? acc.balance : Math.abs(acc.balance), // Credit cards already positive, loans need conversion
                     interestRate: 18.5, // Default rate - could be enhanced to store actual rates
                     minimumPayment: Math.max(25, Math.abs(acc.balance) * 0.02) // 2% minimum payment
                   }))}
-                accounts={accounts} // Pass full account data for payment detection
-                transactions={transactions} // Pass transaction data for automatic tracking
+                accounts={finalAccounts} // Pass full account data for payment detection
+                transactions={finalTransactions} // Pass transaction data for automatic tracking
                 onOpenAIChat={() => {
                   // Switch to actions tab and trigger AI chat
                   setLeftSidebarTab('actions');
@@ -2060,14 +2199,14 @@ const Dashboard = () => {
                           // Trigger inline transaction entry in the account view
                           setLeftSidebarTab('accounts'); // Make sure we're on accounts tab
                         }}
-                        className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
+                        className="flex items-center space-x-2 px-4 py-2 bg-evergreen text-white rounded-full hover:bg-[#003527] transition-colors"
                       >
                         <PlusCircle className="w-4 h-4" />
                         <span>Add Transaction</span>
                       </button>
                       <button
                         onClick={() => setSelectedAccount(null)}
-                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
                       >
                         Close
                       </button>
@@ -2097,7 +2236,7 @@ const Dashboard = () => {
                       onFlagSingleTransaction={handleFlagSingleTransaction}
                       onMoveTransactions={handleMoveTransactions}
                       onApproveTransactions={handleApproveTransactions}
-                      accounts={accounts}
+                      accounts={finalAccounts}
                       categories={dashboardData?.categories?.flatMap((group: any) => 
                         group.budgets?.map((budget: any) => budget.name) || []
                       ) || []}
@@ -2106,7 +2245,7 @@ const Dashboard = () => {
                       isAccountView={true}
                     />
                   ) : (
-                    <div className="p-8 text-center text-gray-500 bg-white border border-gray-200 rounded-lg">
+                    <div className="p-8 text-center text-gray-500 bg-white border border-gray-200 rounded-xl">
                       <Receipt className="w-12 h-12 mx-auto text-gray-400 mb-4" />
                       <p className="text-lg font-medium">No transactions found</p>
                       <p className="text-sm mt-1">Click "Add Transaction" to create your first transaction</p>
@@ -2122,12 +2261,12 @@ const Dashboard = () => {
                 <div className="p-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <Brain className="w-6 h-6 text-[#aed274]" />
+                      <Brain className="w-6 h-6 text-last-lettuce" />
                       <h2 className="text-lg font-semibold text-gray-900">Finley's Financial Insights</h2>
                     </div>
                     <button
                       onClick={() => fetchAISuggestions()}
-                      className="flex items-center space-x-2 px-3 py-1 rounded-lg text-sm font-medium bg-[#aed274] bg-opacity-20 text-[#aed274] hover:bg-opacity-30 transition-colors"
+                      className="flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium bg-evergreen bg-opacity-20 text-evergreen hover:bg-opacity-30 transition-colors"
                     >
                       <RefreshCw className="w-4 h-4" />
                       <span>Refresh Insights</span>
@@ -2142,7 +2281,7 @@ const Dashboard = () => {
                         <div key={index} className="border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center space-x-3">
-                              <div className={`p-2 rounded-lg ${
+                              <div className={`p-2 rounded-full ${
                                 insight.type === 'warning' ? 'bg-red-100' :
                                 insight.type === 'tip' ? 'bg-blue-100' :
                                 insight.type === 'success' ? 'bg-green-100' :
@@ -2154,13 +2293,13 @@ const Dashboard = () => {
                                     insight.type === 'warning' ? 'text-red-600' :
                                     insight.type === 'tip' ? 'text-blue-600' :
                                     insight.type === 'success' ? 'text-green-600' :
-                                    insight.type === 'goal' ? 'text-[#aed274]' :
+                                    insight.type === 'goal' ? 'text-evergreen' :
                                     'text-gray-600'
                                   }`} />
                                 ) : insight.type === 'success' ? (
                                   <CheckCircle className="w-5 h-5 text-green-600" />
                                 ) : insight.type === 'goal' ? (
-                                  <Target className="w-5 h-5 text-[#aed274]" />
+                                  <Target className="w-5 h-5 text-evergreen" />
                                 ) : (
                                   <Lightbulb className="w-5 h-5 text-blue-600" />
                                 )}
@@ -2171,7 +2310,7 @@ const Dashboard = () => {
                                   insight.type === 'warning' ? 'bg-red-100 text-red-700' :
                                   insight.type === 'tip' ? 'bg-blue-100 text-blue-700' :
                                   insight.type === 'success' ? 'bg-green-100 text-green-700' :
-                                  insight.type === 'goal' ? 'bg-[#aed274] bg-opacity-20 text-[#aed274]' :
+                                  insight.type === 'goal' ? 'bg-evergreen bg-opacity-20 text-evergreen' :
                                   'bg-gray-100 text-gray-700'
                                 }`}>
                                   {insight.type}
@@ -2189,7 +2328,7 @@ const Dashboard = () => {
                           <p className="text-gray-600 mb-4 leading-relaxed">
                             {insight.description}
                             {insight.action && (
-                              <span className="block mt-2 font-medium text-[#aed274]">
+                              <span className="block mt-2 font-medium text-evergreen">
                                 💡 Suggestion: {insight.action}
                               </span>
                             )}
@@ -2200,7 +2339,7 @@ const Dashboard = () => {
                               <div className="flex items-center space-x-2">
                                 <div className="w-20 bg-gray-200 rounded-full h-2">
                                   <div 
-                                    className="bg-[#aed274] h-2 rounded-full transition-all duration-300" 
+                                    className="bg-evergreen h-2 rounded-full transition-all duration-300" 
                                     style={{width: `${insight.confidence}%`}}
                                   ></div>
                                 </div>
@@ -2211,7 +2350,7 @@ const Dashboard = () => {
                             {insight.action && (
                               <button
                                 onClick={() => handleInsightAction(insight)}
-                                className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors"
+                                className="flex items-center space-x-2 px-4 py-2 bg-evergreen text-white rounded-full hover:bg-[#003527] transition-colors"
                               >
                                 <span>Let's Do It</span>
                                 <ArrowRight className="w-4 h-4" />
@@ -2230,7 +2369,7 @@ const Dashboard = () => {
                       </p>
                       <button
                         onClick={() => fetchAISuggestions()}
-                        className="flex items-center space-x-2 px-4 py-2 bg-[#aed274] text-white rounded-lg hover:bg-[#9bc267] transition-colors mx-auto"
+                        className="flex items-center space-x-2 px-4 py-2 bg-evergreen text-white rounded-full hover:bg-[#003527] transition-colors mx-auto"
                       >
                         <RefreshCw className="w-4 h-4" />
                         <span>Generate Insights</span>
@@ -2245,97 +2384,148 @@ const Dashboard = () => {
 
           {/* Right Sidebar */}
           <aside className="w-full lg:w-72 xl:w-80 lg:flex-shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 p-4 lg:p-4 xl:p-6 order-first lg:order-last">
-            <div className="space-y-6">
-              {/* Savings Goals */}
+            <div className="space-y-6 sticky top-4">
+              {/* Finley Suggests */}
+              <FinleySuggests 
+                userId={session?.user?.email || ''}
+                onRefreshData={hotReload}
+              />
+              
+              {/* Budget Goals - Contextual based on selection */}
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Savings Goals</h3>
-                  <button
-                    onClick={() => setShowGoalModal(true)}
-                    className="text-[#e8717e] hover:text-[#d65e6a] text-sm font-medium"
-                  >
-                    Add Goal
-                  </button>
-                </div>
+                {selectedBudget ? (
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">{selectedBudget.name}</h3>
+                      <p className="text-xs text-gray-500 mt-1">Budget details and goals</p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedBudget(null)}
+                      className="text-gray-400 hover:text-gray-600 text-sm"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Budget Goals</h3>
+                      <p className="text-xs text-gray-500 mt-1">Select a budget line to view and manage goals</p>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="space-y-4">
-                  {savingsGoals && savingsGoals.length > 0 ? savingsGoals.map((goal: any) => (
-                    <div key={goal.id} className="border border-[#EFF2F0] rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-medium text-gray-900">{goal.name}</h4>
-                        <span className="text-xs text-gray-600">Target: {goal.payoffDate}</span>
+                  {selectedBudget ? (
+                    // Show goals for the selected budget
+                    <>
+                      {/* Budget Details */}
+                      <div className="border border-[#EFF2F0] rounded-xl p-4 bg-gray-50">
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Budgeted:</span>
+                            <span className="font-medium text-evergreen">{formatCurrency(selectedBudget.budgeted)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Spent:</span>
+                            <span className="font-medium text-red-600">{formatCurrency(selectedBudget.spent)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Available:</span>
+                            <span className={`font-medium ${selectedBudget.available >= 0 ? 'text-last-lettuce' : 'text-red-600'}`}>
+                              {formatCurrency(selectedBudget.available)}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div className="w-full bg-gray-200 rounded-full h-2 mt-3">
+                          <div 
+                            className={`h-2 rounded-full ${selectedBudget.available < 0 ? 'bg-red-500' : 'bg-evergreen'}`}
+                            style={{width: `${Math.min(100, selectedBudget.budgeted > 0 ? (selectedBudget.spent / selectedBudget.budgeted) * 100 : 0)}%`}}
+                          ></div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-3">
+                          <p className="text-xs text-gray-600">
+                            {selectedBudget.budgeted > 0 ? Math.round((selectedBudget.spent / selectedBudget.budgeted) * 100) : 0}% used
+                          </p>
+                          <button
+                            onClick={() => setShowGoalModal(true)}
+                            className="text-xs px-3 py-1 bg-evergreen text-white rounded-full hover:bg-coach-green transition-colors"
+                          >
+                            Create Goal
+                          </button>
+                        </div>
                       </div>
                       
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Saved:</span>
-                          <span className="font-medium text-[#7AB29F]">{formatCurrency(goal.current)}</span>
+                      {/* Goals for this budget */}
+                      {(() => {
+                        const budgetGoals = savingsGoals.filter((goal: any) => goal.budgetId === selectedBudget.id);
+                        return budgetGoals.length > 0 ? (
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-medium text-gray-700">Goals for this budget:</h4>
+                            {budgetGoals.map((goal: any) => (
+                              <div key={goal.id} className="border border-[#EFF2F0] rounded-xl p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h5 className="font-medium text-gray-900">{goal.name}</h5>
+                                  <span className="text-xs text-gray-600">{goal.payoffDate}</span>
+                                </div>
+                                
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Target:</span>
+                                    <span className="font-medium">{formatCurrency(goal.target)}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-600">Progress:</span>
+                                    <span className="font-medium text-last-lettuce">{formatCurrency(goal.current)}</span>
+                                  </div>
+                                </div>
+                                
+                                {/* Progress Bar */}
+                                <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                                  <div 
+                                    className="bg-last-lettuce h-1.5 rounded-full"
+                                    style={{width: `${Math.min(100, (goal.current / goal.target) * 100)}%`}}
+                                  ></div>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {Math.round((goal.current / goal.target) * 100)}% complete
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center text-gray-500 py-8 border-2 border-dashed border-gray-200 rounded-xl">
+                            <p className="text-sm mb-2">No goals for this budget yet</p>
+                            <button
+                              onClick={() => setShowGoalModal(true)}
+                              className="text-xs px-3 py-1 bg-last-lettuce text-evergreen rounded-full hover:bg-last-lettuce/80 transition-colors"
+                            >
+                              Create Goal for {selectedBudget.name}
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                    // Show selection prompt when no budget is selected
+                    <div className="text-center text-gray-500 py-12 border-2 border-dashed border-gray-200 rounded-xl">
+                      <div className="mb-4">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <span className="text-2xl">🎯</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Target:</span>
-                          <span className="font-medium">{formatCurrency(goal.target)}</span>
-                        </div>
+                        <h4 className="text-lg font-medium text-gray-700 mb-2">Select a Budget Line</h4>
+                        <p className="text-sm text-gray-500">
+                          Click any budget line on the left to view its details and manage goals
+                        </p>
                       </div>
-                      
-                      {/* Progress Bar */}
-                      <div className="w-full bg-[#EFF2F0] rounded-full h-2 mt-3">
-                        <div 
-                          className="bg-[#7AB29F] h-2 rounded-full"
-                          style={{width: `${Math.min(100, (goal.current / goal.target) * 100)}%`}}
-                        ></div>
-                      </div>
-                      <p className="text-xs text-gray-600 mt-1">
-                        {Math.round((goal.current / goal.target) * 100)}% complete
-                      </p>
-                    </div>
-                  )) : (
-                    <div className="text-center text-gray-500 py-4">
-                      <p className="text-sm">No savings goals yet</p>
-                      <button
-                        onClick={() => setShowGoalModal(true)}
-                        className="mt-2 text-sm font-medium transition-colors"
-                        style={{ color: '#aed274' }}
-                        onMouseEnter={(e) => (e.target as HTMLButtonElement).style.color = '#9bc267'}
-                        onMouseLeave={(e) => (e.target as HTMLButtonElement).style.color = '#aed274'}
-                      >
-                        Create your first goal
-                      </button>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Monthly Insights */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Insights</h3>
-                <div className="space-y-3">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <TrendingUp className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-800">Spending Trend</span>
-                    </div>
-                    <p className="text-sm text-blue-700">
-                      {dashboardData.totalSpent > 0 
-                        ? `You've spent ${formatCurrency(dashboardData.totalSpent)} this month`
-                        : 'No spending recorded yet'
-                      }
-                    </p>
-                  </div>
-                  
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <Target className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-800">Budget Status</span>
-                    </div>
-                    <p className="text-sm text-green-700">
-                      {dashboardData.categories && dashboardData.categories.length > 0
-                        ? `${dashboardData.categories.length} budget lines active`
-                        : 'Create budget lines to track spending'
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           </aside>
         </div>
@@ -2373,8 +2563,15 @@ const Dashboard = () => {
             name: budget.name,
             category: group.name,
             available: budget.available,
-          })) || []
-        ) || []}
+          })).filter((budget: any) => {
+            // For goal funding mode, exclude the goal's own budget and only show budgets with available money
+            if (moveMoneySource?.id === '__GOAL_FUNDING__') {
+              return budget.id !== moveMoneySource.targetGoalBudgetId && budget.available > 0;
+            }
+            // For normal mode, exclude the source budget
+            return budget.id !== moveMoneySource?.id;
+          }) || []
+        ).filter((budget: any) => budget) || []}
         position={moveMoneyPosition}
       />
 
@@ -2409,7 +2606,7 @@ const Dashboard = () => {
             <div className="space-y-3">
               <PlaidLink onSuccess={handlePlaidSuccess} onExit={handlePlaidExit}>
                 <button 
-                  className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-[#aed274]/10 to-[#9cc49c]/10 border border-[#aed274]/30 rounded-xl hover:from-[#aed274]/20 hover:to-[#9cc49c]/20 hover:border-[#aed274]/50 transition-all duration-300 hover:scale-[1.02] shadow-sm hover:shadow-md"
+                  className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-[#125B49]/10 to-[#9cc49c]/10 border border-[#125B49]/30 rounded-full hover:from-[#125B49]/20 hover:to-[#9cc49c]/20 hover:border-[#125B49]/50 transition-all duration-300 hover:scale-[1.02] shadow-sm hover:shadow-md"
                 >
                   <div className="text-left">
                     <div className="font-halyard font-bold text-found-text">Connect Bank Account</div>
@@ -2424,7 +2621,7 @@ const Dashboard = () => {
                   setShowAccountTypeModal(false);
                   setShowAccountModal(true);
                 }}
-                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-blue-50/50 to-purple-50/50 border border-blue-200/50 rounded-xl hover:from-blue-50 hover:to-purple-50 hover:border-blue-300/60 transition-all duration-300 hover:scale-[1.02] shadow-sm hover:shadow-md"
+                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-blue-50/50 to-purple-50/50 border border-blue-200/50 rounded-full hover:from-blue-50 hover:to-purple-50 hover:border-blue-300/60 transition-all duration-300 hover:scale-[1.02] shadow-sm hover:shadow-md"
               >
                 <div className="text-left">
                   <div className="font-halyard font-bold text-found-text">Add Manual Account</div>

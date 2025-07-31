@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const creditCardPaymentBudgets = await prisma.budget.findMany({
         where: {
           userId: userId,
-          category: 'Credit Card Payment'
+          category: 'Credit Card Payments'
         }
       });
       

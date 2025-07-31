@@ -11,6 +11,8 @@ interface CategoryGroupProps {
   onEditBudget: (id: string, updates: { name?: string; amount?: number; category?: string }) => void;
   onDeleteBudget: (id: string) => void;
   onInitiateMoveMoney: (budget: any) => void;
+  onSelectBudget: (budget: any) => void;
+  selectedBudgetId?: string;
   showProgressBars: boolean;
 }
 
@@ -22,6 +24,8 @@ export default function CategoryGroup({
   onEditBudget,
   onDeleteBudget,
   onInitiateMoveMoney,
+  onSelectBudget,
+  selectedBudgetId,
   showProgressBars,
 }: CategoryGroupProps) {
   const { setNodeRef, isOver } = useDroppable({
@@ -92,6 +96,8 @@ export default function CategoryGroup({
               onEdit={onEditBudget}
               onDelete={onDeleteBudget}
               onInitiateMoveMoney={onInitiateMoveMoney}
+              onSelect={onSelectBudget}
+              isSelected={selectedBudgetId === category.id}
               formatCurrency={formatCurrency}
               getStatusColor={getStatusColor}
               showProgressBars={showProgressBars}

@@ -127,7 +127,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Group budgets by category (Bills, Frequent, etc.)
     const budgetsByCategory = budgets.reduce((acc, budget) => {
-      const categoryGroup = budget.category || 'Misc';
+      // Normalize credit card categories to consolidate them
+      let categoryGroup = budget.category || 'Misc';
+      
+      // Consolidate all credit card payment categories
+      if (categoryGroup === 'Credit Card Payment' || 
+          categoryGroup.startsWith('Credit Card Payments:') ||
+          categoryGroup.includes('Credit Card')) {
+        categoryGroup = 'Credit Card Payments';
+      }
+      
       if (!acc[categoryGroup]) {
         acc[categoryGroup] = [];
       }
@@ -143,26 +152,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }, {} as { [key: string]: any[] });
 
     // Transform to the expected format with category groups
-    const categories = Object.entries(budgetsByCategory).map(([categoryName, budgetItems]) => ({
-      id: categoryName.toLowerCase().replace(/\s+/g, '-'),
-      name: categoryName,
-      category: categoryName,
-      budgets: budgetItems,
-      totalBudgeted: budgetItems.reduce((sum, item) => sum + item.budgeted, 0),
-      totalSpent: budgetItems.reduce((sum, item) => sum + item.spent, 0),
-      totalAvailable: budgetItems.reduce((sum, item) => sum + item.available, 0),
-    }));
+    const categories = Object.entries(budgetsByCategory)
+      .map(([categoryName, budgetItems]) => ({
+        id: categoryName.toLowerCase().replace(/\s+/g, '-'),
+        name: categoryName,
+        category: categoryName,
+        budgets: budgetItems,
+        totalBudgeted: budgetItems.reduce((sum, item) => sum + item.budgeted, 0),
+        totalSpent: budgetItems.reduce((sum, item) => sum + item.spent, 0),
+        totalAvailable: budgetItems.reduce((sum, item) => sum + item.available, 0),
+      }))
+      .sort((a, b) => {
+        // Always put Credit Card Payments at the top
+        if (a.name === 'Credit Card Payments') return -1;
+        if (b.name === 'Credit Card Payments') return 1;
+        
+        // Then sort alphabetically
+        return a.name.localeCompare(b.name);
+      });
 
-    // Transform goals data
-    const transformedGoals = goals.map(goal => ({
-      id: goal.id,
-      name: goal.name,
-      current: goal.currentAmount,
-      target: goal.targetAmount,
-      monthlyPayment: goal.type === 'debt' ? Math.ceil((goal.targetAmount - goal.currentAmount) / 12) : Math.ceil(goal.targetAmount / 12),
-      payoffDate: goal.targetDate?.toLocaleDateString() || 'No target date',
-      type: goal.type,
-    }));
+    // Transform goals data and link to corresponding budgets
+    const transformedGoals = goals.map(goal => {
+      // Find the corresponding budget for this goal
+      let correspondingBudget;
+      
+      // Check if goal has linkedBudgetId in description metadata
+      const linkedBudgetMatch = goal.description?.match(/\[LINKED_BUDGET:([^\]]+)\]/);
+      const linkedBudgetId = linkedBudgetMatch ? linkedBudgetMatch[1] : null;
+      
+      if (linkedBudgetId) {
+        // New budget-centric approach: find budget by linkedBudgetId from metadata
+        correspondingBudget = budgets.find(budget => budget.id === linkedBudgetId);
+      } else {
+        // Legacy approach: find budget by name and category
+        correspondingBudget = budgets.find(budget => 
+          budget.name === goal.name && 
+          (goal.type === 'debt' ? budget.category === 'Debt Payoff' : budget.category === 'Savings Goals')
+        );
+      }
+      
+      // Use budget available amount as the current amount for the goal
+      const currentAmount = correspondingBudget ? correspondingBudget.amount - correspondingBudget.spent : goal.currentAmount;
+      
+      return {
+        id: goal.id,
+        name: goal.name,
+        current: Math.max(0, currentAmount), // Don't show negative amounts
+        target: goal.targetAmount,
+        budgetId: correspondingBudget?.id || null,
+        budgetAllocated: correspondingBudget?.amount || 0,
+        budgetSpent: correspondingBudget?.spent || 0,
+        monthlyPayment: goal.type === 'debt' ? Math.ceil((goal.targetAmount - currentAmount) / 12) : Math.ceil(goal.targetAmount / 12),
+        payoffDate: goal.targetDate?.toLocaleDateString() || 'No target date',
+        type: goal.type,
+      };
+    });
 
     // Transform transactions
     const transformedTransactions = recentTransactions.map(transaction => ({

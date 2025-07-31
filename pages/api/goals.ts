@@ -17,13 +17,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'POST') {
-    const { name, description, targetAmount, type, targetDate } = req.body;
+    const { name, description, targetAmount, type, targetDate, linkedBudgetId, linkedBudgetName } = req.body;
 
     if (!name || !targetAmount || !type) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     try {
+      // Create the goal
       const goal = await prisma.goal.create({
         data: {
           userId: userId,
@@ -35,7 +36,66 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
-      res.status(201).json(goal);
+      let correspondingBudget = null;
+
+      if (linkedBudgetId) {
+        // Link to existing budget - just verify it exists and belongs to user
+        correspondingBudget = await prisma.budget.findFirst({
+          where: {
+            id: linkedBudgetId,
+            userId: userId,
+          },
+        });
+
+        if (!correspondingBudget) {
+          // Clean up the goal if budget doesn't exist
+          await prisma.goal.delete({ where: { id: goal.id } });
+          return res.status(400).json({ error: 'Linked budget not found' });
+        }
+
+        // Store the budget linkage in the goal description as metadata
+        const updatedGoal = await prisma.goal.update({
+          where: { id: goal.id },
+          data: {
+            description: `${description || ''}${description ? '\n' : ''}[LINKED_BUDGET:${linkedBudgetId}]`
+          }
+        });
+
+        console.log('✅ Created goal linked to existing budget:', { goal: updatedGoal.id, budget: correspondingBudget.id });
+
+        res.status(201).json({ 
+          goal: updatedGoal, 
+          budget: correspondingBudget,
+          linkedBudgetId: linkedBudgetId,
+          message: `Goal "${name}" created and linked to budget "${correspondingBudget.name}"`
+        });
+      } else {
+        // Create a new corresponding budget for this goal (legacy behavior)
+        const currentMonth = new Date().getMonth() + 1;
+        const currentYear = new Date().getFullYear();
+        
+        // Determine the budget category based on goal type
+        const budgetCategory = type === 'debt' ? 'Debt Payoff' : 'Savings Goals';
+        
+        correspondingBudget = await prisma.budget.create({
+          data: {
+            userId: userId,
+            name: name, // Same name as the goal
+            amount: 0, // Start with $0, user can allocate money
+            category: budgetCategory,
+            month: currentMonth,
+            year: currentYear,
+          },
+        });
+
+        console.log('✅ Created goal and corresponding budget:', { goal: goal.id, budget: correspondingBudget.id });
+
+        res.status(201).json({ 
+          goal, 
+          budget: correspondingBudget,
+          message: `Goal "${name}" created with corresponding budget in "${budgetCategory}" category`
+        });
+      }
     } catch (error) {
       console.error('Error creating goal:', error);
       res.status(500).json({ error: 'Failed to create goal' });

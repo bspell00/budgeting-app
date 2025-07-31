@@ -28,6 +28,13 @@ module.exports = {
           'text': '#151418',        // Dark Gray/Black
           'divider': '#EFF2F0',     // Hover & Dividers
         },
+        // New Color Scheme from Image
+        'teal-midnight': '#051914',
+        'dipped-cream': '#FCF6EB', 
+        'evergreen': '#125B49',
+        'coach-green': '#003527',
+        'white-asparagus': '#ECEABE',
+        'last-lettuce': '#AADD66',
       },
       gridTemplateColumns: {
         '13': 'repeat(13, minmax(0, 1fr))',

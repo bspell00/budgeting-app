@@ -143,6 +143,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const { accountId } = req.query;
       
+      console.log('🔍 GET /api/transactions called with:', { 
+        userId, 
+        accountId: accountId as string | undefined,
+        accountIdType: typeof accountId 
+      });
+      
       // Use the secure validation function to get transactions
       const transactions = await getUserTransactionsFromConnectedAccounts(
         userId,
@@ -150,7 +156,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         50
       );
 
-      res.json(transactions);
+      console.log('🔍 GET /api/transactions result:', {
+        transactionCount: transactions?.length || 0,
+        isArray: Array.isArray(transactions),
+        accountId: accountId as string | undefined
+      });
+
+      // Format response to match expected structure
+      res.json({ transactions });
     } catch (error) {
       console.error('Error fetching transactions:', error);
       if (error instanceof Error && error.message.includes('access denied')) {

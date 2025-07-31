@@ -225,7 +225,7 @@ export default function AIChat({ onExecuteAction }: AIChatProps) {
         <button
           onClick={() => setIsOpen(true)}
           data-testid="ai-chat-open"
-          className="bg-[#e8717e] hover:bg-[#d65e6a] text-white px-4 py-3 rounded-full shadow-xl transition-all duration-300 hover:scale-110 flex items-center space-x-2"
+          className="bg-last-lettuce hover:bg-last-lettuce/80 text-evergreen px-4 py-3 rounded-full shadow-xl transition-all duration-300 hover:scale-110 flex items-center space-x-2"
         >
           <MessageCircle className="w-5 h-5" />
           <span className="font-medium">Ask Finley</span>
@@ -240,9 +240,9 @@ export default function AIChat({ onExecuteAction }: AIChatProps) {
         isMinimized ? 'w-80 h-16' : 'w-96 h-[500px]'
       }`}>
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-[#e8717e] bg-opacity-10 rounded-t-2xl">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-last-lettuce bg-opacity-10 rounded-t-2xl">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-[#e8717e] rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-last-lettuce rounded-full flex items-center justify-center">
               <Bot className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -281,7 +281,7 @@ export default function AIChat({ onExecuteAction }: AIChatProps) {
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                       message.type === 'user' 
                         ? 'bg-blue-600' 
-                        : 'bg-[#e8717e]'
+                        : 'bg-last-lettuce'
                     }`}>
                       {message.type === 'user' ? (
                         <User className="w-4 h-4 text-white" />
@@ -303,7 +303,7 @@ export default function AIChat({ onExecuteAction }: AIChatProps) {
                             <button
                               key={index}
                               onClick={() => handleActionClick(action.action, action.data)}
-                              className="bg-[#e8717e] text-white px-4 py-2 rounded-lg text-sm hover:bg-[#9bc267] transition-colors"
+                              className="bg-last-lettuce text-white px-4 py-2 rounded-lg text-sm hover:bg-last-lettuce/80 transition-colors"
                             >
                               {action.label}
                             </button>
@@ -319,7 +319,7 @@ export default function AIChat({ onExecuteAction }: AIChatProps) {
                 
                 {isTyping && (
                   <div className="flex items-start space-x-3">
-                    <div className="w-8 h-8 bg-[#e8717e] rounded-full flex items-center justify-center">
+                    <div className="w-8 h-8 bg-last-lettuce rounded-full flex items-center justify-center">
                       <Bot className="w-4 h-4 text-white" />
                     </div>
                     <div className="bg-gray-100 p-3 rounded-2xl">

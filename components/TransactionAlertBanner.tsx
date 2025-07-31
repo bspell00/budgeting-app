@@ -33,7 +33,7 @@ export default function TransactionAlertBanner({
   const totalIssues = unapprovedTransactions.length + uncategorizedTransactions.length;
 
   return (
-    <div className="bg-found-primary text-white p-3 mb-6 rounded-lg shadow-sm">
+    <div className="bg-last-lettuce text-teal-midnight p-3 mb-6 rounded-lg shadow-sm">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <AlertTriangle className="w-5 h-5 flex-shrink-0" />

@@ -36,7 +36,7 @@ const LandingPage: React.FC = () => {
     },
     {
       icon: Target,
-      title: "YNAB-Style Zero-Based Budgeting",
+      title: "Zero-Based Budgeting",
       description: "Give every dollar a job with our proven zero-based budgeting system. See exactly where your money goes and take control of your finances.",
       color: "text-blue-600"
     },
@@ -349,12 +349,12 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center space-x-3 mb-4 md:mb-0">
-              <div className="w-8 h-8">
+              <div className="w-10 h-10">
                 <Image 
                   src="/img/PNG/logo_2.png" 
                   alt="Logo" 
-                  width={32} 
-                  height={32}
+                  width={40} 
+                  height={40}
                   className="w-full h-full object-contain"
                 />
               </div>

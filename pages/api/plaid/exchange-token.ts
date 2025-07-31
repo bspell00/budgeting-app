@@ -200,22 +200,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const plaidAccount = accountsData.accounts.find((acc: any) => acc.account_id === transaction.account_id);
           const isCredit = plaidAccount?.type === 'credit';
           
-          // Use enhanced smart categorization
-          let amount = -transaction.amount; // Plaid uses negative for spending
+          // DEBUG: Log transaction details
+          console.log('🔍 Processing Plaid transaction:', {
+            name: transaction.name,
+            plaidAmount: transaction.amount,
+            accountType: plaidAccount?.type,
+            isCredit: isCredit,
+            category: transaction.category
+          });
           
-          // Handle credit card specific transaction types
+          // Calculate amount based on account type
+          let amount;
+          
           if (isCredit) {
             // Credit card logic:
-            // - Plaid negative amounts = purchases = negative outflows in our system
-            // - Plaid positive amounts = payments = positive inflows in our system
-            if (transaction.amount > 0) {
-              // Payment to credit card - this reduces debt (positive inflow)
-              amount = Math.abs(transaction.amount);
-            } else {
-              // Purchase on credit card - this increases debt (negative outflow)
-              amount = -Math.abs(transaction.amount);
-            }
+            // - Plaid positive amounts = payments = positive inflows (reduce debt)
+            // - Plaid negative amounts = purchases = negative outflows (increase debt)
+            amount = transaction.amount; // Use Plaid amount directly for credit cards
+          } else {
+            // Regular account logic:
+            // - Plaid positive amounts = deposits = positive inflows
+            // - Plaid negative amounts = spending = negative outflows
+            amount = -transaction.amount; // Flip sign for regular accounts (Plaid convention)
           }
+          
+          console.log('🔍 Calculated amount:', {
+            originalPlaidAmount: transaction.amount,
+            calculatedAmount: amount,
+            accountType: plaidAccount?.type
+          });
           
           // Get smart category using enhanced Plaid categorization
           let category = CreditCardAutomation.categorizeTransaction(
@@ -228,9 +241,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (isCredit) {
             // Credit card payments (positive amounts on credit cards = payments)
             if (transaction.amount > 0) {
-              category = 'Credit Card Payment';
+              category = 'Credit Card Payments';
             }
-            // Interest and fees
+            // Interest and fees (negative amounts that are fees/interest)
             else if (transaction.category?.includes('Interest') || 
                      transaction.category?.includes('Fee') ||
                      transaction.name.toLowerCase().includes('interest') ||
@@ -265,7 +278,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             },
           });
           
-          // Update budget spent amount if linked and it's an expense
+          // Update budget spent amount if linked and it's an expense (negative amount)
           if (budget && amount < 0) {
             await prisma.budget.update({
               where: { id: budget.id },

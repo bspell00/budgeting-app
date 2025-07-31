@@ -20,7 +20,7 @@ export default function GoalModal({ isOpen, onClose, onSubmit }: GoalModalProps)
   const [type, setType] = useState<'savings' | 'debt'>('savings');
   const [targetDate, setTargetDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -34,15 +34,15 @@ export default function GoalModal({ isOpen, onClose, onSubmit }: GoalModalProps)
         targetDate: targetDate || undefined,
       });
       
-      // Reset form
+      // Reset form (Dashboard handles closing)
       setName('');
       setDescription('');
       setTargetAmount('');
       setType('savings');
       setTargetDate('');
-      onClose();
     } catch (error) {
       console.error('Error creating goal:', error);
+      alert('Failed to create goal. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

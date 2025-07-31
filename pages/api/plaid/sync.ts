@@ -104,15 +104,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           if (!existingTransaction) {
             // Calculate expected amount for matching (applying same logic as transaction creation)
-            let expectedAmount = -transaction.amount; // Default Plaid conversion
+            let expectedAmount;
             if (plaidAccount?.type === 'credit') {
-              if (transaction.amount > 0) {
-                // Payment to credit card
-                expectedAmount = -Math.abs(transaction.amount);
-              } else {
-                // Purchase on credit card
-                expectedAmount = Math.abs(transaction.amount);
-              }
+              // Credit card logic: use Plaid amount directly
+              expectedAmount = transaction.amount;
+            } else {
+              // Regular account logic: flip sign
+              expectedAmount = -transaction.amount;
             }
 
             // Check for matching uncleared manual transaction
@@ -159,30 +157,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               transaction.category || [],
               transaction.personal_finance_category?.detailed || transaction.personal_finance_category?.primary
             );
-            let amount = -transaction.amount; // Plaid uses negative for spending
             
-            // Handle credit card specific transaction types
+            // DEBUG: Log transaction details
+            console.log('🔍 Processing Plaid sync transaction:', {
+              name: transaction.name,
+              plaidAmount: transaction.amount,
+              accountType: plaidAccount?.type,
+              isCredit: plaidAccount?.type === 'credit',
+              category: transaction.category
+            });
+            
+            // Calculate amount based on account type
+            let amount;
             if (plaidAccount?.type === 'credit') {
               // Credit card logic:
-              // - Plaid negative amounts = purchases = positive outflows in our system
-              // - Plaid positive amounts = payments = negative inflows in our system
+              // - Plaid positive amounts = payments = positive inflows (reduce debt)
+              // - Plaid negative amounts = purchases = negative outflows (increase debt)
+              amount = transaction.amount; // Use Plaid amount directly for credit cards
+              
+              // Credit card payments (positive amounts on credit cards = payments)
               if (transaction.amount > 0) {
-                // Payment to credit card - this reduces debt (inflow)
-                category = 'Credit Card Payment';
-                amount = -Math.abs(transaction.amount);
-              } else {
-                // Purchase on credit card - this increases debt (outflow)
-                amount = Math.abs(transaction.amount);
-                
-                // Check for interest and fees
-                if (transaction.category?.includes('Interest') || 
-                    transaction.category?.includes('Fee') ||
-                    transaction.name.toLowerCase().includes('interest') ||
-                    transaction.name.toLowerCase().includes('fee')) {
-                  category = 'Interest & Fees';
-                }
+                category = 'Credit Card Payments';
               }
+              // Interest and fees (negative amounts that are fees/interest)
+              else if (transaction.category?.includes('Interest') || 
+                       transaction.category?.includes('Fee') ||
+                       transaction.name.toLowerCase().includes('interest') ||
+                       transaction.name.toLowerCase().includes('fee')) {
+                category = 'Interest & Fees';
+              }
+            } else {
+              // Regular account logic:
+              // - Plaid positive amounts = deposits = positive inflows
+              // - Plaid negative amounts = spending = negative outflows
+              amount = -transaction.amount; // Flip sign for regular accounts (Plaid convention)
             }
+            
+            console.log('🔍 Calculated sync amount:', {
+              originalPlaidAmount: transaction.amount,
+              calculatedAmount: amount,
+              accountType: plaidAccount?.type,
+              finalCategory: category
+            });
             
             // Find matching budget for automatic linking
             const budget = await prisma.budget.findFirst({
@@ -211,13 +227,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               },
             });
             
-            // Update budget spent amount if linked and it's an expense
-            if (budget && amount > 0) {
+            // Update budget spent amount if linked and it's an expense (negative amount)
+            if (budget && amount < 0) {
               await prisma.budget.update({
                 where: { id: budget.id },
                 data: {
                   spent: {
-                    increment: amount
+                    increment: Math.abs(amount)
                   }
                 }
               });
