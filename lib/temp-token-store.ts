@@ -51,12 +51,13 @@ export function cleanExpiredTokens() {
   const now = new Date();
   let cleaned = 0;
   
-  for (const [token, data] of resetTokens.entries()) {
+  // Use forEach instead of for...of to avoid TypeScript target issues
+  resetTokens.forEach((data, token) => {
     if (now > data.expiry) {
       resetTokens.delete(token);
       cleaned++;
     }
-  }
+  });
   
   if (cleaned > 0) {
     console.log(`🧹 Cleaned ${cleaned} expired tokens`);
