@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { withSecurity, validateInput } from '../../../lib/security-middleware';
+import { sendEmail, generatePasswordResetEmail } from '../../../lib/email';
+import { storeResetToken } from '../../../lib/temp-token-store';
 
 const prisma = new PrismaClient();
 
@@ -37,25 +39,29 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       const resetToken = crypto.randomBytes(32).toString('hex');
       const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
 
-      // Store reset token (in a real app, you'd want a separate table for this)
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          // Note: In production, you'd add these fields to your schema
-          // resetToken,
-          // resetTokenExpiry,
-        }
+      // Store reset token temporarily (in memory for development)
+      // In production, add resetToken and resetTokenExpiry fields to User model
+      storeResetToken(email, resetToken, resetTokenExpiry);
+
+      // Generate reset URL
+      const resetUrl = `${process.env.NEXTAUTH_URL}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+      
+      // Send password reset email
+      const emailResult = await sendEmail({
+        to: email,
+        subject: 'Reset Your Password - Budget App',
+        html: generatePasswordResetEmail(resetUrl, email),
       });
 
-      // In a real app, you'd send an email here
-      console.log(`Password reset requested for ${email}`);
-      console.log(`Reset token: ${resetToken}`);
-      console.log(`Reset URL: ${process.env.NEXTAUTH_URL}/auth/reset-password?token=${resetToken}`);
-      
-      // For development, log the reset link
-      console.log('--- PASSWORD RESET LINK (Development Only) ---');
-      console.log(`Visit: ${process.env.NEXTAUTH_URL}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`);
-      console.log('--- END RESET LINK ---');
+      if (emailResult.success) {
+        console.log(`✅ Password reset email sent to ${email}`);
+      } else {
+        console.error(`❌ Failed to send password reset email to ${email}:`, emailResult.error);
+        // Still log the reset link for development
+        console.log('--- PASSWORD RESET LINK (Development Fallback) ---');
+        console.log(`Visit: ${resetUrl}`);
+        console.log('--- END RESET LINK ---');
+      }
     }
 
     // Always return success message
