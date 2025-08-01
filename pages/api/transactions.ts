@@ -239,40 +239,126 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const transaction = await prisma.transaction.findUnique({
         where: { id: id as string },
-        include: { budget: true }
+        include: { 
+          budget: true,
+          account: true
+        }
       });
 
       if (!transaction || transaction.userId !== userId) {
         return res.status(404).json({ error: 'Transaction not found' });
       }
 
-      // Update budget spent amount if budget exists
-      if (transaction.budget && transaction.amount < 0) {
-        await prisma.budget.update({
-          where: { id: transaction.budget.id },
+      // Check if this is a credit card payment transfer
+      const isCreditCardPayment = (
+        transaction.description.includes('Payment To:') ||
+        transaction.description.includes('Payment From:') ||
+        transaction.plaidTransactionId?.startsWith('cc_payment_')
+      );
+
+      let pairedTransaction = null;
+      
+      if (isCreditCardPayment) {
+        // Find the paired transaction
+        const isOutflow = transaction.description.includes('Payment To:');
+        const isInflow = transaction.description.includes('Payment From:');
+        
+        if (isOutflow) {
+          // This is the outflow (checking account), find the paired inflow (credit card)
+          const creditCardName = transaction.description.replace('Payment To: ', '');
+          pairedTransaction = await prisma.transaction.findFirst({
+            where: {
+              userId: userId,
+              description: `Payment From: ${transaction.account?.accountName}`,
+              date: transaction.date,
+              amount: Math.abs(transaction.amount), // Positive amount for credit card
+              account: {
+                accountType: 'credit'
+              }
+            },
+            include: { budget: true, account: true }
+          });
+        } else if (isInflow) {
+          // This is the inflow (credit card), find the paired outflow (checking)
+          const checkingAccountName = transaction.description.replace('Payment From: ', '');
+          pairedTransaction = await prisma.transaction.findFirst({
+            where: {
+              userId: userId,
+              description: `Payment To: ${transaction.account?.accountName}`,
+              date: transaction.date,
+              amount: -Math.abs(transaction.amount), // Negative amount for checking
+              account: {
+                accountType: { in: ['checking', 'depository', 'savings'] }
+              }
+            },
+            include: { budget: true, account: true }
+          });
+        }
+      }
+
+      // Use a transaction to ensure atomicity
+      await prisma.$transaction(async (tx) => {
+        // Handle the main transaction
+        if (transaction.budget && transaction.amount < 0) {
+          await tx.budget.update({
+            where: { id: transaction.budget.id },
+            data: {
+              spent: {
+                decrement: Math.abs(transaction.amount)
+              }
+            }
+          });
+        }
+
+        await tx.account.update({
+          where: { id: transaction.accountId },
           data: {
-            spent: {
-              decrement: Math.abs(transaction.amount)
+            balance: {
+              decrement: transaction.amount
             }
           }
         });
-      }
 
-      // Update account balance
-      await prisma.account.update({
-        where: { id: transaction.accountId },
-        data: {
-          balance: {
-            decrement: transaction.amount
+        await tx.transaction.delete({
+          where: { id: id as string }
+        });
+
+        // Handle the paired transaction if found
+        if (pairedTransaction) {
+          console.log('🔗 Deleting paired credit card payment transaction:', pairedTransaction.id);
+          
+          if (pairedTransaction.budget && pairedTransaction.amount < 0) {
+            await tx.budget.update({
+              where: { id: pairedTransaction.budget.id },
+              data: {
+                spent: {
+                  decrement: Math.abs(pairedTransaction.amount)
+                }
+              }
+            });
           }
+
+          await tx.account.update({
+            where: { id: pairedTransaction.accountId },
+            data: {
+              balance: {
+                decrement: pairedTransaction.amount
+              }
+            }
+          });
+
+          await tx.transaction.delete({
+            where: { id: pairedTransaction.id }
+          });
         }
       });
 
-      await prisma.transaction.delete({
-        where: { id: id as string }
+      console.log(`✅ Deleted transaction ${id}${pairedTransaction ? ` and paired transaction ${pairedTransaction.id}` : ''}`);
+      res.json({ 
+        success: true, 
+        deletedTransactions: pairedTransaction ? 2 : 1,
+        pairedTransactionDeleted: !!pairedTransaction
       });
-
-      res.json({ success: true });
     } catch (error) {
       console.error('Error deleting transaction:', error);
       res.status(500).json({ error: 'Failed to delete transaction' });

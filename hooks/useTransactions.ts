@@ -253,7 +253,17 @@ export function useTransactions(accountId?: string) {
         throw new Error(errorData.error || 'Failed to delete transaction');
       }
 
-      console.log('✅ Transaction deleted successfully:', transactionId);
+      const deletionResult = await response.json();
+      console.log('✅ Transaction deleted successfully:', {
+        transactionId,
+        deletedTransactions: deletionResult.deletedTransactions,
+        pairedTransactionDeleted: deletionResult.pairedTransactionDeleted
+      });
+
+      // If a paired transaction was deleted, we need to ensure our optimistic updates handle both
+      if (deletionResult.pairedTransactionDeleted) {
+        console.log('🔗 Credit card payment pair was deleted - refreshing all caches');
+      }
 
       // Force revalidate all transaction caches to get real data from server
       mutate(key);
@@ -261,6 +271,8 @@ export function useTransactions(accountId?: string) {
       // Also invalidate account-specific transaction caches
       mutate((key) => typeof key === 'string' && key.startsWith('/api/transactions?accountId='));
       mutate('/api/dashboard'); // Refresh dashboard too
+      
+      return deletionResult;
     } catch (error) {
       console.error('❌ Failed to delete transaction:', error);
       // Revert optimistic update on error

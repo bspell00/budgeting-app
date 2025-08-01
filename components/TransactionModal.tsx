@@ -160,6 +160,17 @@ export default function TransactionModal({
     }
   };
 
+  // Handle Enter key press on form inputs
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      // Check if all required fields are filled
+      if (description && amount && category) {
+        handleSubmit(e as any);
+      }
+    }
+  };
+
   const handleQuickTransaction = (quickTx: any) => {
     setDescription(quickTx.name);
     setAmount(Math.abs(quickTx.amount).toString());
@@ -278,6 +289,7 @@ export default function TransactionModal({
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="e.g., Starbucks, Gas station, Salary"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -295,6 +307,7 @@ export default function TransactionModal({
                 id="amount"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="0.00"
                 step="0.01"
                 min="0"
@@ -312,6 +325,7 @@ export default function TransactionModal({
               id="category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              onKeyDown={handleKeyDown}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             >
@@ -333,6 +347,7 @@ export default function TransactionModal({
               id="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              onKeyDown={handleKeyDown}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
