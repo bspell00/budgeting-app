@@ -85,11 +85,24 @@ export default function PayeeSelectionFlyout({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onClose}></div>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose}></div>
+      
+      {/* Blur shadow area around flyout with feathered edges */}
+      <div 
+        className="fixed z-45 backdrop-blur-md"
+        style={{
+          top: position.top - 100,
+          left: position.left - 100,
+          width: '550px',
+          height: '600px',
+          maskImage: 'radial-gradient(ellipse at center, white 40%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse at center, white 40%, transparent 100%)'
+        }}
+      ></div>
       
       {/* Flyout */}
       <div 
-        className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-xl"
+        className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-2xl"
         style={{
           top: position.top,
           left: position.left,

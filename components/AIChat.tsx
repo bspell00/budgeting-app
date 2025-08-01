@@ -16,11 +16,17 @@ interface Message {
 
 interface AIChatProps {
   onExecuteAction: (action: string, data: any) => Promise<void>;
+  isOpen?: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
   ref?: React.Ref<{ openChat: () => void }>;
 }
 
-export default function AIChat({ onExecuteAction }: AIChatProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpenChange }: AIChatProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  
+  // Use external state if provided, otherwise use internal state
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+  const setIsOpen = onOpenChange || setInternalIsOpen;
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {

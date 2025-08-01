@@ -106,8 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Calculate expected amount for matching (applying same logic as transaction creation)
             let expectedAmount;
             if (plaidAccount?.type === 'credit') {
-              // Credit card logic: use Plaid amount directly
-              expectedAmount = transaction.amount;
+              // Credit card logic: flip sign for credit cards
+              expectedAmount = -transaction.amount;
             } else {
               // Regular account logic: flip sign
               expectedAmount = -transaction.amount;
@@ -171,15 +171,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             let amount;
             if (plaidAccount?.type === 'credit') {
               // Credit card logic:
-              // - Plaid positive amounts = payments = positive inflows (reduce debt)
-              // - Plaid negative amounts = purchases = negative outflows (increase debt)
-              amount = transaction.amount; // Use Plaid amount directly for credit cards
+              // - Plaid positive amounts = purchases = negative outflows (increase debt)
+              // - Plaid negative amounts = payments = positive inflows (reduce debt)
+              amount = -transaction.amount; // Flip sign for credit cards (purchases become negative, payments become positive)
               
-              // Credit card payments (positive amounts on credit cards = payments)
-              if (transaction.amount > 0) {
+              // Credit card payments (negative Plaid amounts become positive after flip = payments)
+              if (transaction.amount < 0) {
                 category = 'Credit Card Payments';
               }
-              // Interest and fees (negative amounts that are fees/interest)
+              // Interest and fees (positive Plaid amounts that are fees/interest become negative after flip)
               else if (transaction.category?.includes('Interest') || 
                        transaction.category?.includes('Fee') ||
                        transaction.name.toLowerCase().includes('interest') ||

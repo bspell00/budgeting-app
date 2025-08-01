@@ -133,11 +133,24 @@ export default function AssignMoneyFlyout({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onClose}></div>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose}></div>
+      
+      {/* Blur shadow area around flyout with feathered edges */}
+      <div 
+        className="fixed z-45 backdrop-blur-md"
+        style={{
+          top: Math.min(position.top, window.innerHeight - 520) - 100,
+          left: Math.min(position.left, window.innerWidth - 420) - 100,
+          width: '600px',
+          height: '700px',
+          maskImage: 'radial-gradient(ellipse at center, white 40%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse at center, white 40%, transparent 100%)'
+        }}
+      ></div>
       
       {/* Flyout */}
       <div 
-        className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-xl overflow-hidden"
+        className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-2xl overflow-hidden"
         style={{
           top: Math.min(position.top, window.innerHeight - 520), // Ensure it doesn't go off-screen
           left: Math.min(position.left, window.innerWidth - 420), // Ensure it doesn't go off-screen
@@ -149,7 +162,7 @@ export default function AssignMoneyFlyout({
         <div className="p-4 border-b border-found-divider">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
-              <DollarSign className={`w-5 h-5 ${isOverspendingMode ? 'text-red-600' : 'text-found-primary'}`} />
+              <DollarSign className={`w-5 h-5 ${isOverspendingMode ? 'text-evergreen' : 'text-found-primary'}`} />
               <h3 className="text-lg font-semibold text-found-text">
                 {isOverspendingMode ? 'Cover Overspending' : 'Assign Money'}
               </h3>
@@ -164,9 +177,9 @@ export default function AssignMoneyFlyout({
           
           {/* Show information when in overspending mode */}
           {isOverspendingMode && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <h4 className="text-sm font-medium text-red-800 mb-2">Overbudgeted</h4>
-              <p className="text-xs text-red-700">
+            <div className="mb-4 p-3 bg-evergreen/10 border border-evergreen/30 rounded-lg">
+              <h4 className="text-sm font-medium text-evergreen mb-2">Overbudgeted</h4>
+              <p className="text-xs text-evergreen/80">
                 Reduce budget amounts to free up money for "To Be Budgeted".
               </p>
             </div>
@@ -197,7 +210,7 @@ export default function AssignMoneyFlyout({
               />
             </div>
             {assignAmount && parseFloat(assignAmount) > 0 && (
-              <p className={`text-xs mt-1 ${isOverspendingMode ? 'text-red-600' : 'text-green-600'}`}>
+              <p className={`text-xs mt-1 ${isOverspendingMode ? 'text-evergreen' : 'text-green-600'}`}>
                 {isOverspendingMode 
                   ? `Click a budget below to reduce it by ${formatCurrency(parseFloat(assignAmount))}`
                   : `Click any budget below to assign ${formatCurrency(parseFloat(assignAmount))}`}
@@ -263,7 +276,7 @@ export default function AssignMoneyFlyout({
                             {hasAmount && canAssign && (
                               <span className={`text-xs px-2 py-1 rounded ${
                                 isOverspendingMode 
-                                  ? 'bg-red-100 text-red-600' 
+                                  ? 'bg-evergreen/10 text-evergreen' 
                                   : 'bg-green-100 text-green-600'
                               }`}>
                                 {isOverspendingMode ? '-' : '+'}{formatCurrency(amount)}

@@ -82,6 +82,7 @@ const Dashboard = () => {
   const [accountToClose, setAccountToClose] = useState<any>(null);
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'unapproved' | 'uncategorized'>('all');
   const [localLoading, setLocalLoading] = useState(false);
+  const [showAIChat, setShowAIChat] = useState(false);
   
   // Local state for optimistic updates (separate from SWR data)
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -104,6 +105,7 @@ const Dashboard = () => {
     isLoading: transactionsLoading,
     updateTransactionOptimistic,
     createTransactionOptimistic,
+    createCreditCardPaymentTransfer,
     deleteTransactionOptimistic,
     toggleClearedOptimistic,
     refresh: refreshTransactions
@@ -624,11 +626,21 @@ const Dashboard = () => {
 
   const handleCreateTransaction = async (transactionData: any) => {
     try {
-      // Use SWR optimistic update for transaction creation
-      await createTransactionOptimistic(transactionData);
+      // Use SWR optimistic update for transaction creation with account data
+      await createTransactionOptimistic(transactionData, finalAccounts);
     } catch (error) {
       console.error('Error creating transaction:', error);
       alert('Failed to create transaction. Please try again.');
+    }
+  };
+
+  const handleCreateCreditCardPaymentTransfer = async (checkingData: any, creditCardData: any) => {
+    try {
+      // Use SWR optimistic update for credit card payment transfer with account data
+      await createCreditCardPaymentTransfer(checkingData, creditCardData, finalAccounts);
+    } catch (error) {
+      console.error('Error creating credit card payment transfer:', error);
+      alert('Failed to create credit card payment transfer. Please try again.');
     }
   };
 
@@ -1682,7 +1694,7 @@ const Dashboard = () => {
                                   <p className={`font-bold text-sm ${
                                     account.accountType === 'credit' || account.balance < 0 ? 'text-red-600' : 'text-green-600'
                                   }`}>
-                                    {account.balance < 0 ? '-' : ''}
+                                    {(account.accountType === 'credit' && account.balance > 0) || account.balance < 0 ? '-' : ''}
                                     {new Intl.NumberFormat('en-US', {
                                       style: 'currency',
                                       currency: 'USD',
@@ -1798,13 +1810,25 @@ const Dashboard = () => {
                     <p className="text-xs text-[#6B7280] mt-1">Plan your debt-free journey</p>
                   </div>
                   {/* Summary for actual debts only */}
-                  {accounts && accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length > 0 ? (
+                  {accounts && accounts.filter(acc => 
+                    (acc.accountType === 'credit' && acc.balance > 0) || 
+                    (acc.accountType === 'loan' && acc.balance < 0)
+                  ).length > 0 ? (
                     <div className="p-3 bg-red-50 rounded-xl border border-red-200">
                       <p className="text-sm font-medium text-red-900">
-                        {accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length} debt account{accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).length > 1 ? 's' : ''} to pay off
+                        {accounts.filter(acc => 
+                          (acc.accountType === 'credit' && acc.balance > 0) || 
+                          (acc.accountType === 'loan' && acc.balance < 0)
+                        ).length} debt account{accounts.filter(acc => 
+                          (acc.accountType === 'credit' && acc.balance > 0) || 
+                          (acc.accountType === 'loan' && acc.balance < 0)
+                        ).length > 1 ? 's' : ''} to pay off
                       </p>
                       <p className="text-xs text-red-700 mt-1">
-                        Total: {formatCurrency(accounts.filter(acc => (acc.accountType === 'credit' || acc.accountType === 'loan') && acc.balance < 0).reduce((sum, acc) => sum + Math.abs(acc.balance), 0))}
+                        Total: -{formatCurrency(accounts.filter(acc => 
+                          (acc.accountType === 'credit' && acc.balance > 0) || 
+                          (acc.accountType === 'loan' && acc.balance < 0)
+                        ).reduce((sum, acc) => sum + Math.abs(acc.balance), 0))}
                       </p>
                     </div>
                   ) : (
@@ -2106,6 +2130,7 @@ const Dashboard = () => {
                     transactions={filteredTransactions}
                     onDeleteTransaction={handleDeleteTransaction}
                     onAddTransaction={handleCreateTransaction}
+                    onCreateCreditCardPaymentTransfer={handleCreateCreditCardPaymentTransfer}
                     onUpdateTransaction={handleUpdateTransaction}
                     onToggleCleared={handleToggleCleared}
                     onFlagTransactions={handleFlagTransactions}
@@ -2148,25 +2173,7 @@ const Dashboard = () => {
                 accounts={finalAccounts} // Pass full account data for payment detection
                 transactions={finalTransactions} // Pass transaction data for automatic tracking
                 onOpenAIChat={() => {
-                  // Switch to actions tab and trigger AI chat
-                  setLeftSidebarTab('actions');
-                  // Add a small delay to ensure tab switch completes
-                  setTimeout(() => {
-                    // Look for the AI chat button and click it
-                    const aiChatButton = document.querySelector('button[data-testid="ai-chat-open"]');
-                    if (aiChatButton instanceof HTMLElement) {
-                      aiChatButton.click();
-                    } else {
-                      // Fallback: look for any button with "Finley" or "Ask" text
-                      const buttons = document.querySelectorAll('button');
-                      for (const button of buttons) {
-                        if (button.textContent?.includes('Finley') || button.textContent?.includes('Ask')) {
-                          button.click();
-                          break;
-                        }
-                      }
-                    }
-                  }, 200);
+                  setShowAIChat(true);
                 }}
                 onRefreshData={refreshDashboard}
               />
@@ -2229,6 +2236,9 @@ const Dashboard = () => {
                           ...transactionData,
                           accountId: selectedAccount.id
                         })
+                      }
+                      onCreateCreditCardPaymentTransfer={(checkingData, creditCardData) =>
+                        handleCreateCreditCardPaymentTransfer(checkingData, creditCardData)
                       }
                       onUpdateTransaction={handleUpdateTransaction}
                       onToggleCleared={handleToggleCleared}
@@ -2652,7 +2662,11 @@ const Dashboard = () => {
 
       {/* AI Chat Assistant */}
       <div data-ai-chat>
-        <AIChat onExecuteAction={handleAIAction} />
+        <AIChat 
+          onExecuteAction={handleAIAction} 
+          isOpen={showAIChat}
+          onOpenChange={setShowAIChat}
+        />
       </div>
     </div>
   );

@@ -37,7 +37,7 @@ export default function AccountSelectionFlyout({
   const getAccountTypeColor = (accountType: string) => {
     switch (accountType.toLowerCase()) {
       case 'credit':
-        return 'bg-red-100 text-red-800';
+        return 'bg-evergreen/10 text-evergreen';
       case 'checking':
         return 'bg-blue-100 text-blue-800';
       case 'savings':
@@ -52,11 +52,24 @@ export default function AccountSelectionFlyout({
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onClose}></div>
+      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose}></div>
+      
+      {/* Blur shadow area around flyout with feathered edges */}
+      <div 
+        className="fixed z-45 backdrop-blur-md"
+        style={{
+          top: position.top - 100,
+          left: position.left - 100,
+          width: '520px',
+          height: '600px',
+          maskImage: 'radial-gradient(ellipse at center, white 40%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse at center, white 40%, transparent 100%)'
+        }}
+      ></div>
       
       {/* Flyout */}
       <div 
-        className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-xl"
+        className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-2xl"
         style={{
           top: position.top,
           left: position.left,
@@ -103,8 +116,11 @@ export default function AccountSelectionFlyout({
                         {account.accountType}
                       </span>
                       {account.balance !== undefined && (
-                        <span className="text-sm text-found-text opacity-60">
-                          {formatCurrency(account.balance)}
+                        <span className={`text-sm ${
+                          account.accountType === 'credit' || account.balance < 0 ? 'text-red-600' : 'text-found-text opacity-60'
+                        }`}>
+                          {(account.accountType === 'credit' && account.balance > 0) || account.balance < 0 ? '-' : ''}
+                          {formatCurrency(Math.abs(account.balance))}
                         </span>
                       )}
                     </div>

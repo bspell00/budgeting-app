@@ -35,6 +35,7 @@ interface TransactionListProps {
     amount: number;
     accountId: string;
   }) => void;
+  onCreateCreditCardPaymentTransfer?: (checkingData: any, creditCardData: any) => Promise<any>;
   onUpdateTransaction?: (id: string, updates: {
     date?: string;
     description?: string;
@@ -68,6 +69,7 @@ export default function TransactionList({
   transactions, 
   onDeleteTransaction, 
   onAddTransaction, 
+  onCreateCreditCardPaymentTransfer,
   onUpdateTransaction,
   onToggleCleared,
   onFlagTransactions,
@@ -89,7 +91,8 @@ export default function TransactionList({
     date: new Date().toISOString().split('T')[0],
     description: '',
     category: '',
-    amount: '',
+    outflow: '',
+    inflow: '',
     accountId: accounts[0]?.id || ''
   });
   
@@ -125,6 +128,10 @@ export default function TransactionList({
   // New transaction account flyout state
   const [showNewTransactionAccountFlyout, setShowNewTransactionAccountFlyout] = useState(false);
   const [newTransactionAccountFlyoutPosition, setNewTransactionAccountFlyoutPosition] = useState({ top: 0, left: 0 });
+  
+  // Transaction menu state
+  const [showTransactionMenu, setShowTransactionMenu] = useState<string | null>(null);
+  const [transactionMenuPosition, setTransactionMenuPosition] = useState({ top: 0, left: 0 });
   
   // Existing transaction account flyout state
   const [showAccountFlyout, setShowAccountFlyout] = useState(false);
@@ -223,33 +230,132 @@ export default function TransactionList({
       date: new Date().toISOString().split('T')[0],
       description: '',
       category: '',
-      amount: '',
+      outflow: '',
+      inflow: '',
       accountId: accounts[0]?.id || ''
     });
   };
 
-  const handleSaveTransaction = () => {
-    if (!newTransaction.description || !newTransaction.category || !newTransaction.amount) {
+  const handleSaveTransaction = async () => {
+    const outflowAmount = newTransaction.outflow ? parseFloat(newTransaction.outflow) : 0;
+    const inflowAmount = newTransaction.inflow ? parseFloat(newTransaction.inflow) : 0;
+    
+    if (!newTransaction.description || !newTransaction.category || (outflowAmount === 0 && inflowAmount === 0)) {
       return; // Validation
     }
 
-    onAddTransaction({
-      date: newTransaction.date,
-      description: newTransaction.description,
+    // Determine final amount (outflow is negative, inflow is positive)
+    const finalAmount = inflowAmount > 0 ? inflowAmount : -outflowAmount;
+    
+    // Check if this is a credit card payment from checking account
+    const sourceAccount = accounts.find(acc => acc.id === newTransaction.accountId);
+    const isCreditCardPayment = (sourceAccount?.accountType === 'checking' || sourceAccount?.accountType === 'depository') && 
+                                outflowAmount > 0 && 
+                                (newTransaction.category.toLowerCase().includes('credit card') ||
+                                 newTransaction.category.toLowerCase().includes('payment') ||
+                                 newTransaction.description.toLowerCase().includes('credit card') ||
+                                 newTransaction.description.toLowerCase().includes('payment to:'));
+    
+    console.log('🔍 Credit card payment detection:', {
+      sourceAccount: sourceAccount ? { id: sourceAccount.id, name: sourceAccount.accountName, type: sourceAccount.accountType } : 'not found',
+      outflowAmount,
+      inflowAmount,
+      finalAmount,
       category: newTransaction.category,
-      amount: parseFloat(newTransaction.amount),
-      accountId: newTransaction.accountId
+      description: newTransaction.description,
+      isCreditCardPayment,
+      hasTransferFunction: !!onCreateCreditCardPaymentTransfer
     });
+    
+    try {
+      // If it's a credit card payment, use the special transfer function
+      console.log('🚀 Checking credit card payment flow:', { 
+        isCreditCardPayment, 
+        hasTransferFunction: !!onCreateCreditCardPaymentTransfer,
+        shouldExecuteTransfer: isCreditCardPayment && onCreateCreditCardPaymentTransfer
+      });
+      
+      if (isCreditCardPayment && onCreateCreditCardPaymentTransfer) {
+        // Find credit card accounts
+        const creditCards = accounts.filter(acc => acc.accountType === 'credit');
+        console.log('💳 Found credit cards:', creditCards.map(cc => ({ id: cc.id, name: cc.accountName })));
+        
+        if (creditCards.length > 0) {
+          // Try to match the specific credit card from the description
+          let targetCreditCard = creditCards[0]; // Default to first one
+          
+          // Look for specific credit card name in description
+          const descriptionLower = newTransaction.description.toLowerCase();
+          for (const cc of creditCards) {
+            if (descriptionLower.includes(cc.accountName.toLowerCase())) {
+              targetCreditCard = cc;
+              break;
+            }
+          }
+          
+          console.log('🎯 Target credit card:', { id: targetCreditCard.id, name: targetCreditCard.accountName });
+          
+          // Create both transactions optimistically at the same time
+          const checkingTransactionData = {
+            date: newTransaction.date,
+            description: newTransaction.description,
+            category: newTransaction.category,
+            amount: finalAmount,
+            accountId: newTransaction.accountId
+          };
+          
+          const creditCardTransactionData = {
+            date: newTransaction.date,
+            description: `Payment from ${sourceAccount?.accountName}`,
+            category: 'Transfer',
+            amount: outflowAmount, // Positive amount for credit card (reduces debt)  
+            accountId: targetCreditCard.id
+          };
+          
+          console.log('📤 About to create credit card payment transfer:', {
+            checkingData: checkingTransactionData,
+            creditCardData: creditCardTransactionData
+          });
+          
+          await onCreateCreditCardPaymentTransfer(checkingTransactionData, creditCardTransactionData);
+          console.log('✅ Credit card payment transfer created successfully to:', targetCreditCard.accountName);
+        } else {
+          console.warn('⚠️ No credit card accounts found for transfer');
+          // Fallback to regular transaction creation
+          await onAddTransaction({
+            date: newTransaction.date,
+            description: newTransaction.description,
+            category: newTransaction.category,
+            amount: finalAmount,
+            accountId: newTransaction.accountId
+          });
+        }
+      } else {
+        // Regular transaction creation
+        console.log('📝 Creating regular transaction (not credit card payment)');
+        await onAddTransaction({
+          date: newTransaction.date,
+          description: newTransaction.description,
+          category: newTransaction.category,
+          amount: finalAmount,
+          accountId: newTransaction.accountId
+        });
+      }
 
-    // Reset form
-    setShowNewRow(false);
-    setNewTransaction({
-      date: new Date().toISOString().split('T')[0],
-      description: '',
-      category: '',
-      amount: '',
-      accountId: accounts[0]?.id || ''
-    });
+      // Reset form
+      setShowNewRow(false);
+      setNewTransaction({
+        date: new Date().toISOString().split('T')[0],
+        description: '',
+        category: '',
+        outflow: '',
+        inflow: '',
+        accountId: accounts[0]?.id || ''
+      });
+    } catch (error) {
+      console.error('❌ Failed to create transaction:', error);
+      alert('Failed to create transaction. Please try again.');
+    }
   };
 
   const handleCancelTransaction = () => {
@@ -258,9 +364,79 @@ export default function TransactionList({
       date: new Date().toISOString().split('T')[0],
       description: '',
       category: '',
-      amount: '',
+      outflow: '',
+      inflow: '',
       accountId: accounts[0]?.id || ''
     });
+  };
+
+  // Helper function to manually create credit card transfer for existing transactions
+  const createCreditCardTransfer = async (transaction: Transaction) => {
+    const sourceAccount = accounts.find(acc => acc.id === transaction.account.id);
+    const isCreditCardPayment = (sourceAccount?.accountType === 'checking' || sourceAccount?.accountType === 'depository') && 
+                                transaction.amount < 0 && // Negative amount means outflow from checking
+                                (transaction.category.toLowerCase().includes('credit card') ||
+                                 transaction.category.toLowerCase().includes('payment') ||
+                                 transaction.description.toLowerCase().includes('credit card') ||
+                                 transaction.description.toLowerCase().includes('payment to:'));
+    
+    if (!isCreditCardPayment) {
+      alert('This transaction does not appear to be a credit card payment.');
+      return;
+    }
+
+    // Find credit card accounts
+    const creditCards = accounts.filter(acc => acc.accountType === 'credit');
+    if (creditCards.length === 0) {
+      alert('No credit card accounts found.');
+      return;
+    }
+
+    // Try to match the specific credit card from the description
+    let targetCreditCard = creditCards[0]; // Default to first one
+    const descriptionLower = transaction.description.toLowerCase();
+    for (const cc of creditCards) {
+      if (descriptionLower.includes(cc.accountName.toLowerCase())) {
+        targetCreditCard = cc;
+        break;
+      }
+    }
+
+    try {
+      if (onCreateCreditCardPaymentTransfer) {
+        // Use the optimistic transfer function for better performance
+        const checkingData = {
+          date: transaction.date,
+          description: transaction.description,
+          category: transaction.category,
+          amount: transaction.amount,
+          accountId: transaction.account.id
+        };
+        
+        const creditCardData = {
+          date: transaction.date,
+          description: `Payment from ${sourceAccount?.accountName}`,
+          category: 'Transfer',
+          amount: Math.abs(transaction.amount),
+          accountId: targetCreditCard.id
+        };
+        
+        await onCreateCreditCardPaymentTransfer(checkingData, creditCardData);
+      } else {
+        // Fallback to regular transaction creation
+        await onAddTransaction({
+          date: transaction.date,
+          description: `Payment from ${sourceAccount?.accountName}`,
+          category: 'Transfer',
+          amount: Math.abs(transaction.amount), // Positive amount for credit card (reduces debt)
+          accountId: targetCreditCard.id
+        });
+      }
+      alert(`Credit card transfer created successfully to ${targetCreditCard.accountName}!`);
+    } catch (error) {
+      console.error('❌ Failed to create credit card payment transfer:', error);
+      alert('Failed to create credit card transfer. Please try again.');
+    }
   };
 
   // Inline editing handlers
@@ -359,8 +535,8 @@ export default function TransactionList({
           <div className="divide-y divide-found-divider max-h-96 overflow-y-auto">
             {/* Inline Transaction Entry Row */}
             {showNewRow && (
-              <div className="px-4 py-3 bg-found-primary/10 border-b-2 border-found-primary/20">
-                <div className={`grid gap-4 text-sm ${isAccountView ? 'grid-cols-14' : 'grid-cols-16'}`}>
+              <div className="group px-2 sm:px-4 py-3 bg-found-surface hover:bg-found-divider/30 transition-colors border-l-4 border-evergreen">
+                <div className={`grid gap-2 sm:gap-4 text-sm ${isAccountView ? 'grid-cols-14' : 'grid-cols-16'}`}>
                   {/* Empty checkbox column */}
                   <div className="col-span-1"></div>
                   {/* Empty flag column */}
@@ -373,7 +549,7 @@ export default function TransactionList({
                       type="date"
                       value={newTransaction.date}
                       onChange={(e) => setNewTransaction(prev => ({ ...prev, date: e.target.value }))}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-2 py-1 border border-found-divider rounded text-sm focus:outline-none focus:ring-2 focus:ring-evergreen"
                     />
                   </div>
                   
@@ -460,20 +636,51 @@ export default function TransactionList({
                     </div>
                   )}
                   
-                  {/* Amount (simplified - one field) */}
-                  <div className="col-span-2">
+                  {/* Outflow Field */}
+                  <div className="col-span-1">
                     <input
                       type="number"
                       step="0.01"
-                      placeholder="Amount"
-                      value={newTransaction.amount}
-                      onChange={(e) => setNewTransaction(prev => ({ ...prev, amount: e.target.value }))}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                      value={newTransaction.outflow}
+                      onChange={(e) => {
+                        setNewTransaction(prev => ({ 
+                          ...prev, 
+                          outflow: e.target.value,
+                          inflow: e.target.value && parseFloat(e.target.value) > 0 ? '' : prev.inflow 
+                        }));
+                      }}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   
+                  {/* Inflow Field */}
+                  <div className="col-span-1">
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={newTransaction.inflow}
+                      onChange={(e) => {
+                        setNewTransaction(prev => ({ 
+                          ...prev, 
+                          inflow: e.target.value,
+                          outflow: e.target.value && parseFloat(e.target.value) > 0 ? '' : prev.outflow
+                        }));
+                      }}
+                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  {/* Cleared Column */}
+                  <div className="col-span-1 flex justify-center">
+                    <div className="w-4 h-4 flex items-center justify-center">
+                      <div className="w-2 h-2 bg-evergreen rounded-full"></div>
+                    </div>
+                  </div>
+                  
                   {/* Action buttons */}
-                  <div className="col-span-2 flex justify-center space-x-1">
+                  <div className="col-span-1 flex justify-center space-x-1">
                     <button
                       onClick={handleSaveTransaction}
                       className="p-1 text-green-600 hover:bg-green-100 rounded transition-colors"
@@ -854,6 +1061,19 @@ export default function TransactionList({
                   {/* Menu Button (replaces individual delete) */}
                   <div className="col-span-1 flex justify-center">
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setTransactionMenuPosition({
+                          top: rect.bottom + 5,
+                          left: rect.left - 100
+                        });
+                        setShowTransactionMenu(transaction.id);
+                        // Close other menus
+                        setShowFlagPopover(false);
+                        setShowMovePopover(false);
+                        setShowIndividualFlagPopover(false);
+                      }}
                       className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-found-text hover:bg-found-divider rounded transition-all duration-150"
                       title="More options"
                     >
@@ -1344,6 +1564,67 @@ export default function TransactionList({
         position={newTransactionPayeeFlyoutPosition}
         currentAccountId={newTransaction.accountId}
       />
+
+      {/* Transaction Menu */}
+      {showTransactionMenu && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setShowTransactionMenu(null)}
+          ></div>
+          
+          {/* Menu */}
+          <div 
+            className="fixed z-50 bg-found-surface border border-found-divider rounded-lg shadow-xl py-2 min-w-[200px]"
+            style={{
+              top: transactionMenuPosition.top,
+              left: transactionMenuPosition.left
+            }}
+          >
+            {(() => {
+              const transaction = transactions.find(t => t.id === showTransactionMenu);
+              if (!transaction) return null;
+              
+              const sourceAccount = accounts.find(acc => acc.id === transaction.account.id);
+              const isCreditCardPayment = (sourceAccount?.accountType === 'checking' || sourceAccount?.accountType === 'depository') && 
+                                          transaction.amount < 0 && 
+                                          (transaction.category.toLowerCase().includes('credit card') ||
+                                           transaction.category.toLowerCase().includes('payment') ||
+                                           transaction.description.toLowerCase().includes('credit card') ||
+                                           transaction.description.toLowerCase().includes('payment to:'));
+              
+              return (
+                <>
+                  {isCreditCardPayment && (
+                    <button
+                      onClick={() => {
+                        createCreditCardTransfer(transaction);
+                        setShowTransactionMenu(null);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-found-text hover:bg-found-divider transition-colors flex items-center space-x-2"
+                    >
+                      <span>💳</span>
+                      <span>Create Credit Card Transfer</span>
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => {
+                      onDeleteTransaction(transaction.id);
+                      setShowTransactionMenu(null);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Transaction</span>
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </>
+      )}
     </div>
   );
 }
