@@ -75,6 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         userId,
         title: planData.title,
         description: planData.description,
+        goals: planData.description,
         category: 'debt',
         priority: 'high',
         timeframe: planData.estimatedMonths.toString(),

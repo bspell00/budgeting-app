@@ -160,6 +160,7 @@ model AIPlan {
   metadata    String?
   timeframe   String?
   estimatedImpact String?
+  aiGenerated Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

@@ -52,6 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           userId,
           title: plan.title,
           description: plan.description,
+          goals: plan.goals || plan.description || 'Financial improvement',
           category: plan.category || 'general',
           priority: plan.priority || 'medium',
           timeframe: plan.timeline || 'varies',

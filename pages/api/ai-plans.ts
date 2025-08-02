@@ -48,6 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           userId,
           title,
           description,
+          goals: description || 'Financial improvement',
           category,
           priority,
           timeframe,

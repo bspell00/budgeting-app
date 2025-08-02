@@ -42,7 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           steps: steps,
           totalDebt: metadata.totalDebt || 0,
           monthlyPayment: metadata.monthlyPayment || 0,
-          estimatedMonths: parseInt(activePlan.timeframe) || 12,
+          estimatedMonths: parseInt(activePlan.timeframe || '12') || 12,
           progress: metadata.progress || 0,
           status: activePlan.status,
           createdAt: activePlan.createdAt.toISOString(),
