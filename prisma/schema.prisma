@@ -152,7 +152,7 @@ model AIPlan {
   userId      String
   title       String
   description String
-  goals       String
+  goals       String   @default("Financial improvement")
   steps       String
   priority    String   @default("medium")
   status      String   @default("pending")
