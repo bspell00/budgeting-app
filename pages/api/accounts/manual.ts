@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
 import { PrismaClient } from '@prisma/client';
+import { PayeeService } from '../../../lib/payee-service';
 
 const prisma = new PrismaClient();
 
@@ -44,8 +45,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    // If it's a credit card, auto-create a payment budget
+    // If it's a credit card, auto-create payment payee and budget
     if (accountType === 'credit') {
+      console.log(`💳 Creating payment payee for credit card: ${accountName}`);
+      
+      // Create the "Payment: [Card Name]" payee for YNAB-style payments
+      await PayeeService.getOrCreatePayee(userId, `Payment: ${accountName}`, {
+        category: 'Transfer',
+        isInternal: true
+      });
+      
       const currentMonth = new Date().getMonth() + 1;
       const currentYear = new Date().getFullYear();
       const currentBalance = Math.abs(parseFloat(balance));
@@ -65,6 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             spent: 0,
           },
         });
+        console.log(`✅ Created payment budget for: ${accountName}`);
       } catch (error) {
         // Budget might already exist, ignore duplicate error
         console.log(`Budget for ${accountName} already exists`);

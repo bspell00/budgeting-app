@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Send, X, Minimize2, Maximize2, Bot, User, Loader } from 'lucide-react';
+import { useAIChat } from '../hooks/useAIChat';
 
 interface Message {
   id: string;
@@ -28,7 +29,15 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
   const setIsOpen = onOpenChange || setInternalIsOpen;
   const [isMinimized, setIsMinimized] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
+  const [inputMessage, setInputMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Use optimistic AI chat hook
+  const { data: chatData, sendMessageOptimistic, executeSuggestionOptimistic } = useAIChat();
+  
+  // Use messages from SWR or fallback to default
+  const messages = chatData?.messages || [
     {
       id: '1',
       type: 'ai',
@@ -49,10 +58,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
         }
       ]
     }
-  ]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  ];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -65,52 +71,17 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: inputMessage,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const messageText = inputMessage;
     setInputMessage('');
     setIsTyping(true);
 
     try {
-      // Call AI chat API
-      const response = await fetch('/api/ai-chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: inputMessage,
-          history: messages.slice(-10) // Send last 10 messages for context
-        }),
+      // Use optimistic update for sending message
+      await sendMessageOptimistic(messageText, {
+        history: messages.slice(-10) // Send last 10 messages for context
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          type: 'ai',
-          content: data.message,
-          timestamp: new Date(),
-          actions: data.actions
-        };
-        setMessages(prev => [...prev, aiMessage]);
-      } else {
-        throw new Error('Failed to get AI response');
-      }
     } catch (error) {
       console.error('AI Chat Error:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment.",
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
     }
@@ -127,39 +98,13 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
     try {
       // Handle special actions that should trigger new AI messages
       if (action === 'get_overview' || action === 'analyze_spending') {
-        // Simulate sending a message to get the AI response
-        const userMessage: Message = {
-          id: Date.now().toString(),
-          type: 'user',
-          content: action === 'get_overview' ? 'Show financial overview' : 'Analyze my spending',
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, userMessage]);
         setIsTyping(true);
-
+        const messageText = action === 'get_overview' ? 'Show financial overview' : 'Analyze my spending';
+        
         try {
-          const response = await fetch('/api/ai-chat', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              message: action,
-              history: messages.slice(-10)
-            }),
+          await sendMessageOptimistic(messageText, {
+            history: messages.slice(-10)
           });
-
-          if (response.ok) {
-            const aiResponse = await response.json();
-            const aiMessage: Message = {
-              id: (Date.now() + 1).toString(),
-              type: 'ai',
-              content: aiResponse.message,
-              timestamp: new Date(),
-              actions: aiResponse.actions
-            };
-            setMessages(prev => [...prev, aiMessage]);
-          }
         } finally {
           setIsTyping(false);
         }
@@ -175,53 +120,22 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
       // Handle add to debt payoff page action
       if (action === 'add_to_debt_payoff') {
         await onExecuteAction(action, data);
-        const confirmMessage: Message = {
-          id: Date.now().toString(),
-          type: 'ai',
-          content: `✅ Plan added to debt payoff page! You can view and manage it there.`,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, confirmMessage]);
+        // Use optimistic update for confirmation message
+        await sendMessageOptimistic('Plan added successfully!', {
+          systemMessage: '✅ Plan added to debt payoff page! You can view and manage it there.'
+        });
         return;
       }
 
-      // For API actions, call the ai-actions endpoint
-      const response = await fetch('/api/ai-actions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action, data }),
-      });
+      // For API actions, use optimistic suggestion execution
+      await executeSuggestionOptimistic({ action, data });
 
-      const result = await response.json();
-
-      if (result.success) {
-        // Add success message from the API
-        const confirmMessage: Message = {
-          id: Date.now().toString(),
-          type: 'ai',
-          content: result.result.message || `✅ Action completed successfully!`,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, confirmMessage]);
-
-        // Trigger a refresh of the dashboard data
-        if (onExecuteAction) {
-          await onExecuteAction('refresh_data', {});
-        }
-      } else {
-        throw new Error(result.error || 'Action failed');
+      // Trigger a refresh of the dashboard data
+      if (onExecuteAction) {
+        await onExecuteAction('refresh_data', {});
       }
     } catch (error) {
       console.error('Action execution error:', error);
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        type: 'ai',
-        content: `❌ ${error instanceof Error ? error.message : 'Sorry, I couldn\'t complete that action. Please try again.'}`,
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
     }
   };
 
@@ -277,7 +191,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 h-80">
               <div className="space-y-4">
-                {messages.map((message) => (
+                {messages.map((message: Message) => (
                   <div
                     key={message.id}
                     className={`flex items-start space-x-3 ${
@@ -305,7 +219,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
                       </div>
                       {message.actions && (
                         <div className="mt-2 space-y-2">
-                          {message.actions.map((action, index) => (
+                          {message.actions.map((action: any, index: number) => (
                             <button
                               key={index}
                               onClick={() => handleActionClick(action.action, action.data)}

@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
+import { useAccounts } from '../hooks/useAccounts';
 
 interface PlaidLinkProps {
   onSuccess: (token: string, metadata: any) => void;
@@ -10,6 +11,9 @@ interface PlaidLinkProps {
 export default function PlaidLink({ onSuccess, onExit, children }: PlaidLinkProps) {
   const [linkToken, setLinkToken] = useState(null);
   const [shouldOpen, setShouldOpen] = useState(false);
+  
+  // Use optimistic accounts hook
+  const { connectAccountOptimistic } = useAccounts();
 
   // Create link token
   const createLinkToken = useCallback(async () => {
@@ -28,6 +32,21 @@ export default function PlaidLink({ onSuccess, onExit, children }: PlaidLinkProp
     token: linkToken,
     onSuccess: async (public_token: string, metadata: any) => {
       try {
+        console.log('🔗 Plaid Link successful, connecting accounts optimistically...');
+        
+        // Show optimistic feedback for connecting accounts
+        if (metadata.accounts && metadata.accounts.length > 0) {
+          for (const account of metadata.accounts) {
+            await connectAccountOptimistic({
+              accountName: account.name,
+              accountType: account.type,
+              accountSubtype: account.subtype,
+              mask: account.mask,
+            });
+          }
+        }
+        
+        // Exchange token with server
         const response = await fetch('/api/plaid/exchange-token', {
           method: 'POST',
           headers: {
@@ -35,10 +54,16 @@ export default function PlaidLink({ onSuccess, onExit, children }: PlaidLinkProp
           },
           body: JSON.stringify({ public_token }),
         });
+        
+        if (!response.ok) {
+          throw new Error('Failed to exchange token');
+        }
+        
         const data = await response.json();
+        console.log('✅ Plaid accounts connected successfully');
         onSuccess(data, metadata);
       } catch (error) {
-        console.error('Error exchanging token:', error);
+        console.error('❌ Error exchanging token:', error);
       }
     },
     onExit: (err: any, metadata: any) => {

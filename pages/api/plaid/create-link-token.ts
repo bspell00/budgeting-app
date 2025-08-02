@@ -42,7 +42,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           client_user_id: userId,
         },
         products: ['transactions'],
-        redirect_uri: 'http://localhost:3000',
       }),
     });
 
@@ -72,7 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Error creating link token:', error);
     res.status(500).json({ 
       error: 'Failed to create link token',
-      details: error instanceof Error ? error instanceof Error ? error instanceof Error ? error.message : "Unknown error" : "Unknown error" : "Unknown error" 
+      details: error instanceof Error ? error.message : "Unknown error" 
     });
   }
 }

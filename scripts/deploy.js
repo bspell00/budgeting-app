@@ -5,8 +5,6 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const SCHEMA_PATH = path.join(__dirname, '../prisma/schema.prisma');
-const DEV_SCHEMA = path.join(__dirname, '../prisma/schema.dev.prisma');
-const PROD_SCHEMA = path.join(__dirname, '../prisma/schema.prod.prisma');
 
 const isProduction = process.env.NODE_ENV === 'production' || 
                      process.env.DATABASE_URL?.includes('postgresql://') ||
@@ -16,14 +14,13 @@ console.log('🔧 Setting up database schema...');
 console.log(`📍 Environment: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
 
 try {
-  // Choose the correct schema
-  const sourceSchema = isProduction ? PROD_SCHEMA : DEV_SCHEMA;
+  // Check if schema exists
+  if (!fs.existsSync(SCHEMA_PATH)) {
+    console.error('❌ Schema file not found:', SCHEMA_PATH);
+    process.exit(1);
+  }
   
-  // Copy the appropriate schema
-  const schemaContent = fs.readFileSync(sourceSchema, 'utf8');
-  fs.writeFileSync(SCHEMA_PATH, schemaContent);
-  
-  console.log(`✅ Using ${isProduction ? 'PostgreSQL' : 'SQLite'} schema`);
+  console.log(`✅ Using unified schema for ${isProduction ? 'PostgreSQL' : 'SQLite'}`);
   console.log('🔄 Generating Prisma client...');
   
   // Generate Prisma client

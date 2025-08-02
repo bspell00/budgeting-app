@@ -9,8 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "postinstall": "node scripts/deploy.js",
-    "db:dev": "cp prisma/schema.dev.prisma prisma/schema.prisma && npx prisma generate",
-    "db:prod": "cp prisma/schema.prod.prisma prisma/schema.prisma && npx prisma generate"
+    "db:generate": "npx prisma generate",
+    "db:push": "npx prisma db push"
   },
   "engines": {
     "node": "18.x",

@@ -322,11 +322,10 @@ export function useTransactions(accountId?: string) {
 
     try {
       // Make API call
-      const response = await fetch('/api/transactions', {
-        method: 'PUT',
+      const response = await fetch(`/api/transactions?id=${transactionId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          id: transactionId, 
           cleared: !transaction.cleared 
         }),
       });

@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { PayeeService } from './payee-service';
 
 const prisma = new PrismaClient();
 
@@ -70,6 +71,13 @@ export class CreditCardPaymentHandler {
       });
     }
 
+    // Get or create the payment payee for this credit card
+    const payeeName = `Payment: ${toAccount.accountName}`;
+    const payee = await PayeeService.getOrCreatePayee(userId, payeeName, {
+      category: 'Transfer',
+      isInternal: true
+    });
+
     // Create transactions in a transaction block
     const result = await prisma.$transaction(async (tx) => {
       // Outflow from checking account
@@ -77,6 +85,7 @@ export class CreditCardPaymentHandler {
         data: {
           userId,
           accountId: fromAccountId,
+          payeeId: payee.id,
           budgetId: creditCardPaymentBudget!.id,
           plaidTransactionId: `cc_payment_out_${Date.now()}`,
           amount: -Math.abs(amount), // Negative for outflow
@@ -94,6 +103,7 @@ export class CreditCardPaymentHandler {
         data: {
           userId,
           accountId: toAccountId,
+          payeeId: payee.id,
           budgetId: null, // Credit card payments don't need spending budget assignment
           plaidTransactionId: `cc_payment_in_${Date.now()}`,
           amount: Math.abs(amount), // Positive for credit card (reduces debt)

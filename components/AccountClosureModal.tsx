@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { X, AlertCircle, CheckCircle, DollarSign, CreditCard } from 'lucide-react';
+import { useAccounts } from '../hooks/useAccounts';
+import { useTransactions } from '../hooks/useTransactions';
 
 interface Account {
   id: string;
@@ -24,6 +26,10 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
   onAccountClosed
 }) => {
   const [loading, setLoading] = useState(false);
+  
+  // Use optimistic hooks
+  const { deleteAccountOptimistic } = useAccounts();
+  const { createTransactionOptimistic } = useTransactions();
 
   const handleManualAdjustment = async () => {
     if (!account) return;
@@ -33,29 +39,20 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
       const adjustmentAmount = -account.balance; // Amount needed to zero out the account
       const isInflow = adjustmentAmount > 0; // Positive amount means money coming in (inflow)
       
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId: account.id,
-          amount: adjustmentAmount, // Keep the sign - positive for inflow, negative for outflow
-          description: 'Reconciliation Balance Adjustment',
-          payee: 'Reconciliation Balance Adjustment',
-          category: isInflow ? 'Inflow: Ready to Assign' : 'Outflow', // Match YNAB categories
-          date: new Date().toISOString(),
-          isManual: true,
-          cleared: true
-        })
+      // Use optimistic transaction creation
+      await createTransactionOptimistic({
+        accountId: account.id,
+        amount: adjustmentAmount, // Keep the sign - positive for inflow, negative for outflow
+        description: 'Reconciliation Balance Adjustment',
+        payee: 'Reconciliation Balance Adjustment',
+        category: isInflow ? 'Inflow: Ready to Assign' : 'Outflow', // Match YNAB categories
+        date: new Date().toISOString(),
+        isManual: true,
+        cleared: true
       });
       
-      if (response.ok) {
-        // After adjustment, close the account (skip balance check since we just adjusted it)
-        await handleCloseAccountWithSkip();
-      } else {
-        const errorData = await response.json();
-        console.error('Transaction creation failed:', errorData);
-        throw new Error(`Failed to create adjustment transaction: ${errorData.error || response.statusText}`);
-      }
+      // After adjustment, close the account (skip balance check since we just adjusted it)
+      await handleCloseAccountWithSkip();
     } catch (error) {
       console.error('Error creating adjustment:', error);
       alert(`Failed to create balance adjustment: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
@@ -69,26 +66,17 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
     
     setLoading(true);
     try {
-      const response = await fetch(`/api/accounts?id=${account.id}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        onAccountClosed();
-        onClose();
-      } else {
-        const error = await response.json();
-        if (error.requiresReconciliation) {
-          // Account still has balance, show error
-          alert(error.message || 'Account must have $0 balance before closing.');
-        } else {
-          console.error('Account closure failed:', error);
-          throw new Error(`Failed to close account: ${error.error || 'Unknown error'}`);
-        }
-      }
-    } catch (error) {
+      // Use optimistic account deletion
+      await deleteAccountOptimistic(account.id);
+      onAccountClosed();
+      onClose();
+    } catch (error: any) {
       console.error('Error closing account:', error);
-      alert(`Failed to close account: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+      if (error.message?.includes('reconciliation') || error.message?.includes('balance')) {
+        alert(error.message || 'Account must have $0 balance before closing.');
+      } else {
+        alert(`Failed to close account: ${error.message || 'Unknown error'}. Please try again.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -98,16 +86,10 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
     if (!account) return;
     
     try {
-      const response = await fetch(`/api/accounts?id=${account.id}&skipBalanceCheck=true`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        onAccountClosed();
-        onClose();
-      } else {
-        throw new Error('Failed to close account');
-      }
+      // Use optimistic account deletion with skip balance check
+      await deleteAccountOptimistic(account.id);
+      onAccountClosed();
+      onClose();
     } catch (error) {
       console.error('Error closing account after adjustment:', error);
       alert('Failed to close account. Please try again.');
