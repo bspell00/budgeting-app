@@ -160,7 +160,6 @@ async function handleMoveMoney(userId: string, data: any) {
         toBudgetId,
         amount: transferAmount,
         reason: `AI Assistant transfer: $${transferAmount} from ${fromBudget.name} to ${toBudget.name}`,
-        automated: false
       }
     })
   ]);
@@ -378,8 +377,7 @@ async function handleFixOverspending(userId: string, data: any) {
             toBudgetId: overspentBudget.id,
             amount: overspentAmount,
             reason: `AI Assistant fix: Cover overspending in ${overspentBudget.name}`,
-            automated: false
-          }
+              }
         })
       ]);
 

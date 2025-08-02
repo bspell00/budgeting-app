@@ -26,6 +26,7 @@ export class SecureAccountService {
     return await prisma.account.create({
       data: {
         ...data,
+        accountSubtype: data.accountSubtype || '',
         plaidAccessToken: encryptedToken,
       },
     });

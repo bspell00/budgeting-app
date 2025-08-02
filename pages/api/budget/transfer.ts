@@ -105,7 +105,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           toBudgetId: overspentBudgetIds[0], // Use first overspent budget as primary target for audit
           amount: amount,
           reason: `Covered overspending: moved $${amount} from ${sourceBudget.name} to cover overspent categories`,
-          automated: false, // This is a manual user action
+          // This is a manual user action
         },
       });
 

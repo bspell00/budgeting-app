@@ -424,17 +424,11 @@ export class CreditCardAutomation {
           },
           amount: { lt: 0 }, // Expenses (negative amounts)
           // Check if this transaction is not already covered by looking for existing transfers
-          NOT: {
-            budgetTransfers: {
-              some: {
-                fromBudgetId: budgetId
-              }
-            }
-          }
+          budgetTransfer: null
         },
         include: {
           account: true,
-          budgetTransfers: true
+          budgetTransfer: true
         },
         orderBy: { date: 'asc' } // Process oldest first
       });
@@ -459,7 +453,7 @@ export class CreditCardAutomation {
         const transferAmount = Math.min(remainingAssignment, expenseAmount);
 
         // Find or create the credit card payment budget
-        const creditCardName = transaction.account.accountName;
+        const creditCardName = transaction.account?.accountName || 'Unknown';
         let creditCardBudget = await prisma.budget.findFirst({
           where: {
             userId: userId,
@@ -503,7 +497,6 @@ export class CreditCardAutomation {
             amount: transferAmount,
             transactionId: transaction.id,
             reason: `Auto-transfer to cover ${creditCardName} expense in ${budget.name}`,
-            automated: true
           }
         });
 

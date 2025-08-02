@@ -79,13 +79,15 @@ model Transaction {
   cleared             Boolean   @default(false)
   approved            Boolean   @default(false)
   isManual            Boolean   @default(false)
+  flagColor           String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  budget  Budget?  @relation(fields: [budgetId], references: [id])
-  payee   Payee?   @relation(fields: [payeeId], references: [id])
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account       Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  budget        Budget?         @relation(fields: [budgetId], references: [id])
+  payee         Payee?          @relation(fields: [payeeId], references: [id])
+  budgetTransfer BudgetTransfer?
 
   @@index([userId])
   @@index([accountId])
@@ -121,9 +123,10 @@ model BudgetTransfer {
   transactionId   String?  @unique
   createdAt       DateTime @default(now())
 
-  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fromBudget Budget @relation("FromBudget", fields: [fromBudgetId], references: [id], onDelete: Cascade)
-  toBudget   Budget @relation("ToBudget", fields: [toBudgetId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromBudget  Budget       @relation("FromBudget", fields: [fromBudgetId], references: [id], onDelete: Cascade)
+  toBudget    Budget       @relation("ToBudget", fields: [toBudgetId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
 
   @@index([userId])
 }
@@ -153,6 +156,10 @@ model AIPlan {
   steps       String
   priority    String   @default("medium")
   status      String   @default("pending")
+  category    String?
+  metadata    String?
+  timeframe   String?
+  estimatedImpact String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

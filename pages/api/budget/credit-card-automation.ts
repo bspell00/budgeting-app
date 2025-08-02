@@ -93,7 +93,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const transfers = await prisma.budgetTransfer.findMany({
           where: {
             userId: userId,
-            automated: true
           },
           include: {
             fromBudget: true,
