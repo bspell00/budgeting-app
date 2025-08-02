@@ -136,7 +136,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Budget transfers for automation tracking
       prisma.budgetTransfer.findMany({
         where: { userId },
-        include: { fromBudget: true, toBudget: true, transaction: true },
+        include: { fromBudget: true, toBudget: true },
         orderBy: { createdAt: 'desc' },
         take: 100
       })

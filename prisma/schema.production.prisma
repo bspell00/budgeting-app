@@ -87,7 +87,6 @@ model Transaction {
   account       Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
   budget        Budget?         @relation(fields: [budgetId], references: [id])
   payee         Payee?          @relation(fields: [payeeId], references: [id])
-  budgetTransfer BudgetTransfer?
 
   @@index([userId])
   @@index([accountId])
@@ -120,13 +119,12 @@ model BudgetTransfer {
   toBudgetId      String
   amount          Float
   reason          String
-  transactionId   String?  @unique
+  transactionId   String?
   createdAt       DateTime @default(now())
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   fromBudget  Budget       @relation("FromBudget", fields: [fromBudgetId], references: [id], onDelete: Cascade)
   toBudget    Budget       @relation("ToBudget", fields: [toBudgetId], references: [id], onDelete: Cascade)
-  transaction Transaction? @relation(fields: [transactionId], references: [id])
 
   @@index([userId])
 }

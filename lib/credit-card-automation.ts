@@ -422,13 +422,10 @@ export class CreditCardAutomation {
           account: {
             accountType: 'credit'
           },
-          amount: { lt: 0 }, // Expenses (negative amounts)
-          // Check if this transaction is not already covered by looking for existing transfers
-          budgetTransfer: null
+          amount: { lt: 0 } // Expenses (negative amounts)
         },
         include: {
-          account: true,
-          budgetTransfer: true
+          account: true
         },
         orderBy: { date: 'asc' } // Process oldest first
       });
