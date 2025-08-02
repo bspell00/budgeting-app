@@ -38,6 +38,10 @@ async function resetAllData() {
     const transactionsDeleted = await prisma.transaction.deleteMany({});
     console.log(`    ✅ Deleted ${transactionsDeleted.count} transactions`);
     
+    console.log('  - Deleting payees...');
+    const payeesDeleted = await prisma.payee.deleteMany({});
+    console.log(`    ✅ Deleted ${payeesDeleted.count} payees`);
+    
     console.log('  - Deleting budgets...');
     const budgetsDeleted = await prisma.budget.deleteMany({});
     console.log(`    ✅ Deleted ${budgetsDeleted.count} budgets`);
@@ -60,6 +64,7 @@ async function resetAllData() {
     console.log(`  - Accounts: ${accountsDeleted.count}`);
     console.log(`  - Budgets: ${budgetsDeleted.count}`);
     console.log(`  - Transactions: ${transactionsDeleted.count}`);
+    console.log(`  - Payees: ${payeesDeleted.count}`);
     console.log(`  - Goals: ${goalsDeleted.count}`);
     console.log(`  - Budget Transfers: ${budgetTransfersDeleted.count}`);
     console.log(`  - AI Plans: ${aiPlansDeleted.count}`);
