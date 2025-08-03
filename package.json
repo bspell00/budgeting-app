@@ -4,13 +4,24 @@
   "description": "AI-powered zero-based budgeting app with Plaid integration",
   "scripts": {
     "dev": "node scripts/deploy.js && next dev -p 3001",
+    "dev:test": "NODE_ENV=test npm run dev",
+    "dev:staging": "NODE_ENV=staging npm run dev",
     "build": "node scripts/deploy.js && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "postinstall": "node scripts/deploy.js",
     "db:generate": "npx prisma generate",
-    "db:push": "npx prisma db push"
+    "db:push": "npx prisma db push",
+    "db:push:dev": "dotenv -e .env.development -- npx prisma db push",
+    "db:push:test": "dotenv -e .env.test -- npx prisma db push",
+    "db:push:staging": "dotenv -e .env.staging -- npx prisma db push",
+    "db:reset": "node scripts/reset-database.js",
+    "db:reset:test": "NODE_ENV=test node scripts/reset-database.js --confirm",
+    "db:setup": "bash scripts/setup-postgres.sh",
+    "migrate:dev": "dotenv -e .env.development -- npx prisma migrate dev",
+    "migrate:test": "dotenv -e .env.test -- npx prisma migrate dev",
+    "migrate:deploy": "npx prisma migrate deploy"
   },
   "engines": {
     "node": "18.x",
@@ -43,6 +54,7 @@
     "react-markdown": "^10.1.0",
     "react-plaid-link": "^4.0.1",
     "react-syntax-highlighter": "^15.6.1",
+    "pg": "^8.11.3",
     "resend": "^4.7.0",
     "swr": "^2.3.4",
     "tailwindcss": "3.4.14",
@@ -50,6 +62,8 @@
   },
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
+    "@types/pg": "^8.10.9",
+    "dotenv-cli": "^7.3.0",
     "eslint": "8.57.1",
     "eslint-config-next": "14.2.18",
     "prisma": "^6.12.0"

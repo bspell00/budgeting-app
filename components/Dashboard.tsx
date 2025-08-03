@@ -8,6 +8,7 @@ import BudgetModal from './BudgetModal';
 import GoalModal from './GoalModal';
 import TransactionList from './TransactionList';
 import QuickStats from './QuickStats';
+import DatabaseStatus from './DatabaseStatus';
 import CategoryGroup from './CategoryGroup';
 import BudgetItem from './BudgetItem';
 import MoveMoneyPopover from './MoveMoneyPopover';
@@ -2670,6 +2671,9 @@ const Dashboard = () => {
           onOpenChange={setShowAIChat}
         />
       </div>
+
+      {/* Database Status (Development Only) */}
+      {process.env.NODE_ENV === 'development' && <DatabaseStatus />}
     </div>
   );
 };

@@ -231,7 +231,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
                         </div>
                       )}
                       <p className="text-xs text-gray-500 mt-1">
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>

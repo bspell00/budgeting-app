@@ -1,12 +1,12 @@
 # Claude Code Project Memory
 
 ## Project Overview
-This is a YNAB-style budgeting application built with Next.js, TypeScript, Prisma, and SQLite. The app integrates with Plaid for real banking data and includes advanced credit card automation features.
+This is a YNAB-style budgeting application built with Next.js, TypeScript, Prisma, and PostgreSQL. The app integrates with Plaid for real banking data and includes advanced credit card automation features.
 
 ## Technology Stack
 - **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
 - **Backend**: Next.js API routes, Prisma ORM
-- **Database**: SQLite (dev.db)
+- **Database**: PostgreSQL (environment-specific databases)
 - **Authentication**: NextAuth.js
 - **Banking Integration**: Plaid API (sandbox mode)
 - **Drag & Drop**: @dnd-kit
@@ -89,20 +89,35 @@ PLAID_ENV="sandbox"
 
 ## Development Commands
 
-### Database
+### Database Setup & Management
 ```bash
-npx prisma generate          # Generate Prisma client
-npx prisma db push          # Apply schema changes
-npx prisma migrate reset    # Reset database
-sqlite3 dev.db ".tables"    # Check database tables
+npm run db:setup            # Set up PostgreSQL databases
+npm run db:generate         # Generate Prisma client
+npm run db:push:dev         # Apply schema to development database
+npm run db:push:test        # Apply schema to test database
+npm run db:reset            # Interactive database reset
+npm run db:reset:test       # Quick test database reset
 ```
 
-### Application
+### Environment-Specific Development
 ```bash
-npm run dev                 # Start development server
+npm run dev                 # Development environment (default)
+npm run dev:test           # Test environment 
+npm run dev:staging        # Staging environment
+```
+
+### Application Management
+```bash
 npm run build              # Build for production
 npm run lint               # Run linting
 npm run typecheck          # Check TypeScript
+```
+
+### PostgreSQL Database Access
+```bash
+psql budgeting_app_dev      # Connect to development database
+psql budgeting_app_test     # Connect to test database
+psql budgeting_app_dev -c "\\dt"  # List tables in development
 ```
 
 ## Current Status

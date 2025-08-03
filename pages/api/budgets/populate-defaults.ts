@@ -25,6 +25,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'No user ID found' });
   }
 
+  // Verify the user exists in the database
+  const user = await prisma.user.findUnique({
+    where: { id: userId }
+  });
+  
+  if (!user) {
+    console.log('❌ User not found in database:', userId);
+    return res.status(404).json({ 
+      error: 'User not found in database', 
+      userId: userId,
+      suggestion: 'Please sign up again to create your account in the new database'
+    });
+  }
+  
+  console.log('✅ User verified:', user.email);
+
   if (req.method === 'POST') {
     try {
       const { month, year, overwrite = false } = req.body;

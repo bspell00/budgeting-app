@@ -148,7 +148,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const cashAccounts = accounts.filter(a => ['depository', 'investment'].includes(a.accountType));
     const creditAccounts = accounts.filter(a => a.accountType === 'credit');
     const totalCash = cashAccounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
-    const totalDebt = creditAccounts.reduce((sum, a) => sum + Math.abs(Math.min(0, a.balance)), 0);
+    const totalDebt = creditAccounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);
     const netWorth = totalCash - totalDebt;
     
     // === INCOME ANALYSIS ===
@@ -428,8 +428,26 @@ ${budgets.map((b: any) =>
 
 ACCOUNT DETAILS:
 ${accounts.map((a: any) => 
-  `- ${a.accountName} (${a.accountType}): $${a.balance.toFixed(2)}`
+  `- ${a.accountName} (${a.accountType}): $${a.balance.toFixed(2)}${a.availableBalance ? ` (Available: $${a.availableBalance.toFixed(2)})` : ''}`
 ).join('\n')}
+
+DEBT ANALYSIS:
+${accounts.filter((a: any) => {
+  // Credit cards: positive balance means debt
+  if (a.accountType === 'credit') return a.balance > 0;
+  // Loans/other debt: negative balance means debt
+  return a.balance < 0;
+}).map((a: any) => {
+  const debtAmount = a.accountType === 'credit' ? a.balance : Math.abs(a.balance);
+  return `- ${a.accountName}: $${debtAmount.toFixed(2)} debt${a.accountType === 'credit' ? ` (Available Credit: $${(a.availableBalance || 0).toFixed(2)})` : ''}`;
+}).join('\n') || 'No outstanding debts detected'}
+
+CASH FLOW ANALYSIS:
+- Available Cash: $${financialOverview.totalCash.toFixed(2)}
+- Total Debt: $${financialOverview.totalDebt.toFixed(2)}
+- Monthly Income: $${incomeAnalysis.averageMonthlyIncome.toFixed(2)}
+- Monthly Expenses: $${incomeAnalysis.averageMonthlyExpenses.toFixed(2)}
+- Available for Debt Payments: $${Math.max(0, incomeAnalysis.averageMonthlyIncome - incomeAnalysis.averageMonthlyExpenses).toFixed(2)}
 
 TOP SPENDING MERCHANTS:
 ${topMerchants.slice(0, 5).map(([merchant, data]: [string, any]) => 
@@ -484,6 +502,27 @@ CAPABILITIES:
 - Compare periods and track progress
 - Identify opportunities and risks
 - Answer specific financial questions with exact data
+- Generate comprehensive debt payoff strategies
+
+DEBT PAYOFF EXPERTISE:
+When asked about debt, create detailed, actionable plans that include:
+- Specific debt prioritization strategy (avalanche vs snowball)
+- Monthly payment amounts based on their actual budget
+- Timeline with month-by-month breakdown
+- Interest savings calculations
+- Required budget adjustments
+- Milestone checkpoints
+- Alternative scenarios (extra payments, windfalls)
+
+DEBT PAYOFF PLAN FORMAT:
+When generating debt payoff plans, structure them as:
+1. Current Debt Summary (balances, interest rates, minimums)
+2. Recommended Strategy (with rationale)
+3. Monthly Payment Plan (specific amounts and timing)
+4. Timeline & Milestones (month-by-month progress)
+5. Interest Savings Projection
+6. Budget Adjustments Required
+7. Action Steps to Start Immediately
 
 RESPONSE STYLE:
 - Use specific dollar amounts and percentages from their data
@@ -491,6 +530,7 @@ RESPONSE STYLE:
 - Be conversational but thorough
 - Provide actionable insights and recommendations
 - Use the user's actual financial data to support all statements
+- When creating debt plans, be specific about amounts, dates, and steps
 
 USER'S COMPLETE FINANCIAL DATA:
 ${financialDataContext}
@@ -511,17 +551,40 @@ Instructions: Answer the user's question using their specific financial data. Be
     
     // Smart plan detection - check if AI created a plan that could be added to debt payoff page
     const containsPlan = detectPlanInResponse(aiMessage);
+    const isDebtPayoffPlan = detectDebtPayoffPlan(aiMessage);
     const actions = [];
     
-    if (containsPlan) {
+    if (isDebtPayoffPlan) {
       actions.push({
         type: 'button',
-        label: '📋 Add this plan to debt payoff page',
+        label: '🎯 Save Debt Payoff Plan',
         action: 'add_to_debt_payoff',
         data: {
           planContent: aiMessage,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          planType: 'debt_payoff'
         }
+      });
+    } else if (containsPlan) {
+      actions.push({
+        type: 'button',
+        label: '📋 Save Financial Plan',
+        action: 'add_to_debt_payoff',
+        data: {
+          planContent: aiMessage,
+          timestamp: new Date().toISOString(),
+          planType: 'general'
+        }
+      });
+    }
+    
+    // Add common debt-related quick actions if message mentions debt
+    if (/debt|credit card|loan|payoff/i.test(aiMessage)) {
+      actions.push({
+        type: 'button',
+        label: '💳 Analyze All Debts',
+        action: 'analyze_all_debts',
+        data: {}
       });
     }
     
@@ -538,6 +601,50 @@ Instructions: Answer the user's question using their specific financial data. Be
       actions: []
     };
   }
+}
+
+// Specific debt payoff plan detection
+function detectDebtPayoffPlan(message: string): boolean {
+  const debtPayoffIndicators = [
+    // Specific debt strategies
+    'debt avalanche', 'debt snowball', 'debt payoff plan', 'debt elimination',
+    'pay off debt', 'payoff strategy', 'debt strategy',
+    
+    // Timeline indicators for debt
+    'months to pay off', 'debt free in', 'payoff timeline', 'debt elimination timeline',
+    'payment schedule', 'monthly payment plan',
+    
+    // Financial calculations specific to debt
+    'minimum payment', 'extra payment', 'interest savings', 'total interest',
+    'payoff date', 'debt reduction', 'payment amounts'
+  ];
+  
+  const structuralDebtIndicators = [
+    // Debt-specific structure
+    'current debt summary', 'recommended strategy', 'monthly payment plan',
+    'timeline & milestones', 'interest savings', 'budget adjustments',
+    'action steps', 'debt prioritization'
+  ];
+  
+  const messageLower = message.toLowerCase();
+  
+  // Check for debt payoff specific terms
+  const hasDebtTerms = debtPayoffIndicators.some(term => messageLower.includes(term.toLowerCase()));
+  
+  // Check for structured debt plan content
+  const hasDebtStructure = structuralDebtIndicators.some(indicator => messageLower.includes(indicator.toLowerCase()));
+  
+  // Look for numbered steps with debt context
+  const hasNumberedSteps = /[1-7]\./g.test(message);
+  const isDebtContext = /debt|credit card|loan|payoff|payment/i.test(message);
+  
+  // Check for specific debt amounts and calculations
+  const hasDebtCalculations = /\$[\d,]+.*payment|\$[\d,]+.*debt|\$[\d,]+.*interest/i.test(message);
+  
+  // Strong indicators of a debt payoff plan
+  return (hasDebtTerms && hasNumberedSteps) ||
+         (hasDebtStructure && isDebtContext) ||
+         (hasDebtCalculations && hasNumberedSteps && isDebtContext && message.length > 300);
 }
 
 // Smart plan detection function

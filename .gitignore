@@ -23,12 +23,17 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Local env files
+# Local env files - ALL ENVIRONMENT FILES SHOULD BE IGNORED
 .env
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
+.env.staging
+.env.staging.local
 
 # Vercel
 .vercel
