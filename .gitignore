@@ -39,3 +39,15 @@ prisma/migrations/
 # Setup and deployment guides with sensitive info
 HEROKU_SETUP.md
 EMAIL_SETUP.md
+
+# Database
+dev.db
+dev.db-journal
+*.db
+
+# Additional security patterns
+*.key
+secrets.txt
+**/secrets/*
+**/*secret*
+**/*api-key*

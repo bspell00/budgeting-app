@@ -14,7 +14,7 @@
 #### Heroku Configuration
 ```bash
 # Set environment variables on Heroku
-heroku config:set RESEND_API_KEY="re_fpyaWSXb_5G6MvFgVQHNmHA4Skyy3TZuF" --app your-staging-app
+heroku config:set RESEND_API_KEY="your-resend-api-key" --app your-staging-app
 heroku config:set FROM_EMAIL="onboarding@resend.dev" --app your-staging-app
 heroku config:set NODE_ENV="staging" --app your-staging-app
 heroku config:set NEXTAUTH_URL="https://your-staging-app.herokuapp.com" --app your-staging-app
