@@ -505,14 +505,18 @@ CAPABILITIES:
 - Generate comprehensive debt payoff strategies
 
 DEBT PAYOFF EXPERTISE:
-When asked about debt, create detailed, actionable plans that include:
-- Specific debt prioritization strategy (avalanche vs snowball)
-- Monthly payment amounts based on their actual budget
-- Timeline with month-by-month breakdown
-- Interest savings calculations
-- Required budget adjustments
-- Milestone checkpoints
-- Alternative scenarios (extra payments, windfalls)
+When users ask about debt, credit cards, loans, or paying off balances, ALWAYS create detailed debt payoff plans.
+
+DEBT PAYOFF PLAN REQUIREMENTS:
+- Use explicit terms like "debt payoff plan", "debt strategy", or "debt elimination"
+- Include specific monthly payment amounts from their actual budget
+- Provide clear timeline (e.g., "12 months", "18 months")
+- Use numbered steps or bullet points for action items
+- Specify strategy type (debt avalanche, debt snowball, or custom)
+- Include actual dollar amounts from their debt balances
+- Give concrete next steps they can take immediately
+
+IMPORTANT: Structure all debt responses as actionable debt payoff plans with clear steps, timelines, and payment amounts.
 
 DEBT PAYOFF PLAN FORMAT:
 When generating debt payoff plans, structure them as:
@@ -552,9 +556,21 @@ Instructions: Answer the user's question using their specific financial data. Be
     // Smart plan detection - check if AI created a plan that could be added to debt payoff page
     const containsPlan = detectPlanInResponse(aiMessage);
     const isDebtPayoffPlan = detectDebtPayoffPlan(aiMessage);
+    
+    // Debug logging
+    console.log('🔍 Plan Detection Debug:', {
+      messageLength: aiMessage.length,
+      containsPlan,
+      isDebtPayoffPlan,
+      hasDebtKeywords: /debt|credit card|loan|payoff|payment/i.test(aiMessage),
+      hasNumbers: /\$[\d,]+/.test(aiMessage),
+      hasSteps: /[1-9]\.|•|-/.test(aiMessage)
+    });
+    
     const actions = [];
     
     if (isDebtPayoffPlan) {
+      console.log('✅ Adding Save Debt Payoff Plan button');
       actions.push({
         type: 'button',
         label: '🎯 Save Debt Payoff Plan',
@@ -566,6 +582,7 @@ Instructions: Answer the user's question using their specific financial data. Be
         }
       });
     } else if (containsPlan) {
+      console.log('✅ Adding Save Financial Plan button');
       actions.push({
         type: 'button',
         label: '📋 Save Financial Plan',
@@ -576,6 +593,8 @@ Instructions: Answer the user's question using their specific financial data. Be
           planType: 'general'
         }
       });
+    } else {
+      console.log('❌ No plan detected in AI response');
     }
     
     // Add common debt-related quick actions if message mentions debt
@@ -588,6 +607,12 @@ Instructions: Answer the user's question using their specific financial data. Be
       });
     }
     
+    console.log('🎯 Final AI response:', {
+      messageLength: aiMessage.length,
+      actionsCount: actions.length,
+      actions: actions.map(a => a.label)
+    });
+
     return {
       message: aiMessage,
       actions
@@ -605,46 +630,57 @@ Instructions: Answer the user's question using their specific financial data. Be
 
 // Specific debt payoff plan detection
 function detectDebtPayoffPlan(message: string): boolean {
-  const debtPayoffIndicators = [
-    // Specific debt strategies
-    'debt avalanche', 'debt snowball', 'debt payoff plan', 'debt elimination',
-    'pay off debt', 'payoff strategy', 'debt strategy',
-    
-    // Timeline indicators for debt
-    'months to pay off', 'debt free in', 'payoff timeline', 'debt elimination timeline',
-    'payment schedule', 'monthly payment plan',
-    
-    // Financial calculations specific to debt
-    'minimum payment', 'extra payment', 'interest savings', 'total interest',
-    'payoff date', 'debt reduction', 'payment amounts'
-  ];
-  
-  const structuralDebtIndicators = [
-    // Debt-specific structure
-    'current debt summary', 'recommended strategy', 'monthly payment plan',
-    'timeline & milestones', 'interest savings', 'budget adjustments',
-    'action steps', 'debt prioritization'
-  ];
-  
   const messageLower = message.toLowerCase();
   
-  // Check for debt payoff specific terms
-  const hasDebtTerms = debtPayoffIndicators.some(term => messageLower.includes(term.toLowerCase()));
+  // Primary debt payoff indicators - more lenient
+  const primaryDebtTerms = [
+    'debt payoff', 'pay off debt', 'debt plan', 'debt strategy',
+    'debt avalanche', 'debt snowball', 'debt elimination',
+    'payoff plan', 'debt free', 'eliminate debt'
+  ];
   
-  // Check for structured debt plan content
-  const hasDebtStructure = structuralDebtIndicators.some(indicator => messageLower.includes(indicator.toLowerCase()));
+  // Secondary debt indicators
+  const debtContextTerms = [
+    'debt', 'credit card', 'loan', 'owe', 'balance',
+    'interest', 'payment', 'payoff', 'minimum payment'
+  ];
   
-  // Look for numbered steps with debt context
-  const hasNumberedSteps = /[1-7]\./g.test(message);
-  const isDebtContext = /debt|credit card|loan|payoff|payment/i.test(message);
+  // Plan structure indicators
+  const planStructureTerms = [
+    'step', 'month', 'payment', 'strategy', 'plan',
+    'prioritize', 'focus', 'recommend', 'should pay',
+    'timeline', 'schedule'
+  ];
   
-  // Check for specific debt amounts and calculations
-  const hasDebtCalculations = /\$[\d,]+.*payment|\$[\d,]+.*debt|\$[\d,]+.*interest/i.test(message);
+  // Check for primary debt payoff terms
+  const hasPrimaryDebtTerms = primaryDebtTerms.some(term => messageLower.includes(term));
   
-  // Strong indicators of a debt payoff plan
-  return (hasDebtTerms && hasNumberedSteps) ||
-         (hasDebtStructure && isDebtContext) ||
-         (hasDebtCalculations && hasNumberedSteps && isDebtContext && message.length > 300);
+  // Check for debt context
+  const hasDebtContext = debtContextTerms.some(term => messageLower.includes(term));
+  
+  // Check for planning structure
+  const hasStructure = planStructureTerms.some(term => messageLower.includes(term));
+  
+  // Look for numbered steps or lists
+  const hasNumberedSteps = /[1-9]\.|•|-/.test(message);
+  
+  // Check for financial amounts
+  const hasAmounts = /\$[\d,]+/.test(message);
+  
+  // More lenient detection logic
+  return (
+    // Direct debt payoff terms
+    hasPrimaryDebtTerms ||
+    
+    // Debt context + structure + reasonable length
+    (hasDebtContext && hasStructure && message.length > 150) ||
+    
+    // Debt context + numbered steps
+    (hasDebtContext && hasNumberedSteps) ||
+    
+    // Debt context + amounts + advice structure
+    (hasDebtContext && hasAmounts && hasStructure && message.length > 100)
+  );
 }
 
 // Smart plan detection function

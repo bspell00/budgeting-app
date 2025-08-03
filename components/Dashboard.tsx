@@ -1204,6 +1204,8 @@ const Dashboard = () => {
       // Extract clean plan data from AI response
       const extractedPlan = extractPlanFromAIResponse(data.planContent);
       
+      console.log('💾 Saving debt payoff plan:', extractedPlan.title);
+      
       const response = await fetch('/api/ai-plans', {
         method: 'POST',
         headers: {
@@ -1213,27 +1215,53 @@ const Dashboard = () => {
           title: extractedPlan.title,
           description: extractedPlan.summary,
           category: 'debt',
-          priority: extractedPlan.priority,
-          timeframe: extractedPlan.timeframe,
-          estimatedImpact: extractedPlan.impact,
+          priority: extractedPlan.priority || 'high',
+          timeframe: extractedPlan.timeframe || 'medium',
+          estimatedImpact: extractedPlan.impact || 'significant',
           steps: JSON.stringify(extractedPlan.steps),
           metadata: JSON.stringify({
             source: 'ai_chat',
             confidence: 'high',
             created: data.timestamp,
+            strategy: extractedPlan.strategy || 'custom',
+            totalDebt: extractedPlan.totalDebt || 0,
+            monthlyPayment: extractedPlan.monthlyPayment || 0,
+            estimatedMonths: extractedPlan.estimatedMonths || 12,
             originalResponse: data.planContent // Keep full response for reference
           })
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save plan');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Failed to save plan: ${errorData.error || response.statusText}`);
       }
 
       const result = await response.json();
-      console.log('Plan saved successfully:', result);
+      console.log('✅ Debt payoff plan saved successfully:', result.plan?.title);
+      
+      // Show success message to user
+      if (typeof showSuccess === 'function') {
+        showSuccess('Debt payoff plan saved! Check the Debt Payoff tab to see your personalized plan.');
+      }
+      
+      // Refresh the debt payoff data
+      await refreshDashboard();
+      
+      // Also force refresh the debt plans specifically
+      const { mutate } = await import('swr');
+      await mutate('/api/debt-plans');
+      
+      // Switch to debt tab to show the updated plan
+      setLeftSidebarTab('debt');
+      
     } catch (error) {
-      console.error('Error saving AI plan:', error);
+      console.error('❌ Error saving debt payoff plan:', error);
+      
+      // Show error message to user
+      if (typeof showError === 'function') {
+        showError('Failed to save debt payoff plan. Please try again.');
+      }
       throw error;
     }
   };
@@ -1254,9 +1282,31 @@ const Dashboard = () => {
     // Extract monthly payment recommendation
     const monthlyPayment = content.match(/\$(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:monthly|per month|each month)/i)?.[1];
     
-    // Extract timeline
-    const timelineMatch = content.match(/(\d+)\s*months?/i);
+    // Extract timeline - look for various patterns
+    const timelinePatterns = [
+      /(\d+)\s*months?/i,                    // "6 months", "12 month"
+      /in\s+(\d+)\s*months?/i,               // "in 6 months"
+      /within\s+(\d+)\s*months?/i,           // "within 6 months"
+      /over\s+(\d+)\s*months?/i,             // "over 6 months"
+      /(\d+)[-\s]*month/i,                   // "6-month", "6 month"
+      /payoff.*?(\d+)\s*months?/i,           // "payoff in 6 months"
+      /debt.*?free.*?(\d+)\s*months?/i       // "debt free in 6 months"
+    ];
+    
+    let timelineMatch = null;
+    for (const pattern of timelinePatterns) {
+      timelineMatch = content.match(pattern);
+      if (timelineMatch) break;
+    }
+    
     const timeline = timelineMatch ? `${timelineMatch[1]} months` : 'medium';
+    const estimatedMonths = timelineMatch ? parseInt(timelineMatch[1]) : 12;
+    
+    console.log('🕐 Timeline extraction debug:', {
+      timelineMatch: timelineMatch?.[0],
+      extractedMonths: estimatedMonths,
+      timeline
+    });
     
     // Extract strategy type
     const isAvalanche = /avalanche|highest.+interest|high.+interest.+first/i.test(content);
@@ -1315,8 +1365,12 @@ const Dashboard = () => {
       summary: `Pay off debt in ${timeline} using strategic payments${monthlyPayment ? ` of $${monthlyPayment}/month` : ''}.`,
       steps: steps,
       priority: amounts.length > 3 ? 'high' : 'medium',
-      timeframe: timeline === 'medium' ? 'medium' : parseInt(timeline) > 12 ? 'long' : 'short',
-      impact: amounts.some(amt => parseInt(amt.replace(/[$,]/g, '')) > 5000) ? 'significant' : 'moderate'
+      timeframe: estimatedMonths.toString(), // Store actual number of months as string
+      impact: amounts.some(amt => parseInt(amt.replace(/[$,]/g, '')) > 5000) ? 'significant' : 'moderate',
+      strategy: strategy,
+      totalDebt: amounts.length > 0 ? parseInt(amounts[0].replace(/[$,]/g, '')) : 0,
+      monthlyPayment: monthlyPayment ? parseFloat(monthlyPayment.replace(/,/g, '')) : 0,
+      estimatedMonths: estimatedMonths
     };
   };
 

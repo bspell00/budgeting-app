@@ -56,3 +56,4 @@ secrets.txt
 **/secrets/*
 **/*secret*
 **/*api-key*
+.env.staging

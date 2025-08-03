@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { 
   Target, 
   TrendingUp, 
@@ -68,6 +69,8 @@ interface DebtPayoffStrategiesProps {
   onRefreshData: () => void;
 }
 
+const fetcher = (url: string) => fetch(url).then(res => res.json());
+
 const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
   debts,
   accounts,
@@ -76,17 +79,22 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
   onRefreshData
 }) => {
   const { showAlert, showSuccess, showError, showWarning } = useAlert();
-  const [activePlan, setActivePlan] = useState<DebtPlan | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Use SWR for reactive debt plan loading
+  const { data: debtPlansData, error: debtPlansError, mutate: mutateDebtPlans } = useSWR('/api/debt-plans', fetcher, {
+    refreshInterval: 0,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: true
+  });
+  
+  const activePlan = debtPlansData?.activePlan || null;
+  const isLoadingDebtPlans = !debtPlansData && !debtPlansError;
 
   // Calculate total debt and monthly minimums
   const totalDebt = debts.reduce((sum, debt) => sum + debt.balance, 0);
   const totalMinimums = debts.reduce((sum, debt) => sum + debt.minimumPayment, 0);
   const debtCount = debts.length;
-
-  useEffect(() => {
-    loadActivePlan();
-  }, []);
 
   // Automatically detect credit card payments from transactions
   const detectCreditCardPayments = () => {
@@ -158,24 +166,6 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
     return Math.min((totalPaid / totalOriginalDebt) * 100, 100);
   };
 
-  const loadActivePlan = async () => {
-    try {
-      const response = await fetch('/api/debt-plans');
-      if (response.ok) {
-        const data = await response.json();
-        setActivePlan(data.activePlan);
-      } else {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to load plans' }));
-        console.error('Error loading active plan:', errorData);
-        // Don't show alert on initial load, just log the error
-      }
-    } catch (error) {
-      console.error('Error loading active plan:', error);
-      // Don't show alert on initial load failure
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const generateSnowballPlan = async () => {
     if (debts.length === 0) {
@@ -197,7 +187,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
       
       if (response.ok) {
         const data = await response.json();
-        setActivePlan(data.plan);
+        await mutateDebtPlans(); // Refresh debt plans data
         onRefreshData();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to generate plan' }));
@@ -231,7 +221,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
       
       if (response.ok) {
         const data = await response.json();
-        setActivePlan(data.plan);
+        await mutateDebtPlans(); // Refresh debt plans data
         onRefreshData();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to generate plan' }));
@@ -255,7 +245,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
       });
       
       if (response.ok) {
-        setActivePlan(null);
+        await mutateDebtPlans(); // Refresh debt plans data
         onRefreshData();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to delete plan' }));
@@ -287,7 +277,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
     });
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingDebtPlans) {
     return (
       <div className="p-6 bg-found-surface rounded-xl shadow-sm border border-found-divider">
         <div className="animate-pulse space-y-4">

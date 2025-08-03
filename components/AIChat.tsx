@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Send, X, Minimize2, Maximize2, Bot, User, Loader } from 'lucide-react';
 import { useAIChat } from '../hooks/useAIChat';
+import { mutate } from 'swr';
 
 interface Message {
   id: string;
@@ -120,10 +121,24 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
       // Handle add to debt payoff page action
       if (action === 'add_to_debt_payoff') {
         await onExecuteAction(action, data);
-        // Use optimistic update for confirmation message
-        await sendMessageOptimistic('Plan added successfully!', {
-          systemMessage: '✅ Plan added to debt payoff page! You can view and manage it there.'
-        });
+        
+        // Add simple confirmation message without triggering AI
+        const currentData = chatData;
+        const confirmationMessage = {
+          id: `confirmation-${Date.now()}`,
+          type: 'ai',
+          content: '✅ **Debt payoff plan saved successfully!**\n\nYour plan has been added to the Debt Payoff page where you can track progress and manage payments.',
+          timestamp: new Date(),
+          isConfirmation: true
+        };
+
+        const updatedData = {
+          ...currentData,
+          messages: [...(currentData?.messages || []), confirmationMessage]
+        };
+
+        // Update the cache with confirmation message
+        mutate('/api/ai-chat/session', updatedData, false);
         return;
       }
 

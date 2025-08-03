@@ -3,10 +3,16 @@ import useSWR, { mutate } from 'swr';
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export function useAIChat() {
-  const { data, error, isLoading } = useSWR('/api/ai-chat/history', fetcher, {
+  // Use local state instead of trying to fetch non-existent history endpoint
+  const { data, error, isLoading } = useSWR('/api/ai-chat/session', () => {
+    // Return default empty chat session
+    return {
+      messages: []
+    };
+  }, {
     refreshInterval: 0, // Don't auto-refresh chat history
     revalidateOnFocus: false, // Don't refresh when window gains focus
-    revalidateOnReconnect: true, // Refresh when connection is restored
+    revalidateOnReconnect: false, // Don't refresh when connection is restored
     dedupingInterval: 1000,
   });
 
@@ -19,18 +25,18 @@ export function useAIChat() {
     // Create user message
     const userMessage = {
       id: `temp-user-${Date.now()}`,
-      role: 'user',
+      type: 'user',
       content: message,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date(),
       isOptimistic: true
     };
 
     // Create AI loading message
     const aiLoadingMessage = {
       id: `temp-ai-${Date.now()}`,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
+      type: 'ai',
+      content: 'Thinking...',
+      timestamp: new Date(),
       isLoading: true,
       isOptimistic: true
     };
@@ -42,7 +48,7 @@ export function useAIChat() {
     };
 
     // Update cache optimistically
-    mutate('/api/ai-chat/history', optimisticData, false);
+    mutate('/api/ai-chat/session', optimisticData, false);
 
     try {
       // Make API call
@@ -70,21 +76,22 @@ export function useAIChat() {
           ...(currentData?.messages || []),
           {
             id: `user-${Date.now()}`,
-            role: 'user',
+            type: 'user',
             content: message,
-            timestamp: new Date().toISOString()
+            timestamp: new Date()
           },
           {
             id: `ai-${Date.now()}`,
-            role: 'assistant',
-            content: result.response || result.message,
-            timestamp: new Date().toISOString()
+            type: 'ai',
+            content: result.message,
+            timestamp: new Date(),
+            actions: result.actions || []
           }
         ]
       };
 
       // Force revalidate with final data
-      mutate('/api/ai-chat/history', finalData, false);
+      mutate('/api/ai-chat/session', finalData, false);
       
       return result;
     } catch (error) {
@@ -98,15 +105,15 @@ export function useAIChat() {
           userMessage,
           {
             id: `error-${Date.now()}`,
-            role: 'assistant',
+            type: 'ai',
             content: 'Sorry, I encountered an error. Please try again.',
-            timestamp: new Date().toISOString(),
+            timestamp: new Date(),
             isError: true
           }
         ]
       };
       
-      mutate('/api/ai-chat/history', errorData, false);
+      mutate('/api/ai-chat/session', errorData, false);
       throw error;
     }
   };
@@ -159,27 +166,11 @@ export function useAIChat() {
       messages: []
     };
 
-    mutate('/api/ai-chat/history', optimisticData, false);
+    mutate('/api/ai-chat/session', optimisticData, false);
 
-    try {
-      // Make API call
-      const response = await fetch('/api/ai-chat/history', {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to clear chat history');
-      }
-
-      console.log('✅ AI chat history cleared successfully');
-      
-      return { success: true };
-    } catch (error) {
-      console.error('❌ Failed to clear AI chat history:', error);
-      // Revert optimistic update on error
-      mutate('/api/ai-chat/history', currentData, false);
-      throw error;
-    }
+    // Since we're using local state now, just return success
+    console.log('✅ AI chat history cleared successfully');
+    return { success: true };
   };
 
   return {
@@ -189,6 +180,6 @@ export function useAIChat() {
     sendMessageOptimistic,
     executeSuggestionOptimistic,
     clearHistoryOptimistic,
-    refresh: () => mutate('/api/ai-chat/history'),
+    refresh: () => mutate('/api/ai-chat/session'),
   };
 }
