@@ -47,7 +47,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // Use custom ENVIRONMENT variable for proper staging detection
       const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || 'development';
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3001';
-      const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+      const resetUrl = `${baseUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
       
       console.log(`🔗 Generated reset URL (${environment}):`, resetUrl);
       
