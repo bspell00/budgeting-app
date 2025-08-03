@@ -163,7 +163,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           // Fix amount signs for credit cards
           if (isCredit) {
-            amount = -transaction.amount;
+            // Credit card transactions:
+            // - Plaid positive amounts = purchases → should be negative outflows
+            // - Plaid negative amounts = payments → should be positive inflows
+            if (transaction.amount > 0) {
+              // Purchase: positive Plaid amount becomes negative (outflow)
+              amount = -transaction.amount;
+            } else {
+              // Payment: negative Plaid amount becomes positive (inflow)
+              amount = Math.abs(transaction.amount);
+            }
           }
 
           // Categorize transaction

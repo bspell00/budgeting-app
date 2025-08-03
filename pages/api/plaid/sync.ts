@@ -106,8 +106,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Calculate expected amount for matching (applying same logic as transaction creation)
             let expectedAmount;
             if (plaidAccount?.type === 'credit') {
-              // Credit card logic: flip sign for credit cards
-              expectedAmount = -transaction.amount;
+              // Credit card logic: apply same transformation as main amount calculation
+              if (transaction.amount > 0) {
+                // Purchase: positive Plaid amount becomes negative (outflow)
+                expectedAmount = -transaction.amount;
+              } else {
+                // Payment: negative Plaid amount becomes positive (inflow)
+                expectedAmount = Math.abs(transaction.amount);
+              }
             } else {
               // Regular account logic: flip sign
               expectedAmount = -transaction.amount;
@@ -173,7 +179,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               // Credit card logic:
               // - Plaid positive amounts = purchases = negative outflows (increase debt)
               // - Plaid negative amounts = payments = positive inflows (reduce debt)
-              amount = -transaction.amount; // Flip sign for credit cards (purchases become negative, payments become positive)
+              if (transaction.amount > 0) {
+                // Purchase: positive Plaid amount becomes negative (outflow)
+                amount = -transaction.amount;
+              } else {
+                // Payment: negative Plaid amount becomes positive (inflow)
+                amount = Math.abs(transaction.amount);
+              }
               
               // Credit card payments (negative Plaid amounts become positive after flip = payments)
               if (transaction.amount < 0) {
