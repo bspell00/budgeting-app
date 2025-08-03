@@ -520,7 +520,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
             </h4>
             
             <div className="space-y-3">
-              {activePlan.steps.map((step, index) => {
+              {activePlan.steps.map((step: string, index: number) => {
                 const currentProgress = automaticProgress || activePlan.progress || 0;
                 const isCompleted = index < Math.floor(currentProgress / (100 / activePlan.steps.length));
                 const isCurrent = index === Math.floor(currentProgress / (100 / activePlan.steps.length));

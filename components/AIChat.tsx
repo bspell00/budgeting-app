@@ -16,6 +16,15 @@ interface Message {
   }>;
 }
 
+// Type guard to ensure message data matches our interface
+const ensureMessageType = (data: any): Message => ({
+  id: data.id,
+  type: (data.type === 'user' || data.type === 'ai') ? data.type : 'ai',
+  content: data.content || '',
+  timestamp: data.timestamp instanceof Date ? data.timestamp : new Date(data.timestamp),
+  actions: data.actions || []
+});
+
 interface AIChatProps {
   onExecuteAction: (action: string, data: any) => Promise<void>;
   isOpen?: boolean;
@@ -37,8 +46,8 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
   // Use optimistic AI chat hook
   const { data: chatData, sendMessageOptimistic, executeSuggestionOptimistic } = useAIChat();
   
-  // Use messages from SWR or fallback to default
-  const messages = chatData?.messages || [
+  // Use messages from SWR or fallback to default, ensuring proper typing
+  const messages: Message[] = (chatData?.messages || [
     {
       id: '1',
       type: 'ai',
@@ -59,7 +68,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
         }
       ]
     }
-  ];
+  ]).map(ensureMessageType);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -206,7 +215,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 h-80">
               <div className="space-y-4">
-                {messages.map((message: Message) => (
+                {messages.map((message) => (
                   <div
                     key={message.id}
                     className={`flex items-start space-x-3 ${
