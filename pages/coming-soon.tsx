@@ -78,7 +78,7 @@ export default function ComingSoon() {
                 Coming Soon
               </h1>
               <h2 className="text-xl sm:text-2xl lg:text-3xl text-last-lettuce font-medium mb-6">
-                Take Control of Your Financial Future
+                Give Your Budget a Brain
               </h2>
               <p className="text-lg sm:text-xl text-dipped-cream/90 max-w-2xl mx-auto leading-relaxed">
                 The revolutionary budgeting app that combines smart envelope budgeting 
@@ -103,13 +103,13 @@ export default function ComingSoon() {
             )}
 
             {/* Features Preview */}
-            <div className="mb-12 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
+            <div className="mb-12 grid grid-cols-3 gap-3 sm:gap-6 max-w-3xl mx-auto">
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
                 <div className="w-12 h-12 bg-last-lettuce/30 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <DollarSign className="w-6 h-6 text-last-lettuce" />
                 </div>
                 <h3 className="text-lg font-semibold text-white mb-2">Smart Budgeting</h3>
-                <p className="text-sm text-dipped-cream/80">Envelope budgeting with intelligent automation and real-time tracking</p>
+                <p className="text-sm text-dipped-cream/80 hidden md:flex">Envelope budgeting with intelligent automation and real-time tracking</p>
               </div>
               
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
@@ -117,7 +117,7 @@ export default function ComingSoon() {
                   <Target className="w-6 h-6 text-last-lettuce" />
                 </div>
                 <h3 className="text-lg font-semibold text-white mb-2">AI Insights</h3>
-                <p className="text-sm text-dipped-cream/80">Personalized recommendations and debt payoff strategies</p>
+                <p className="text-sm text-dipped-cream/80 hidden md:flex">Personalized recommendations and debt payoff strategies</p>
               </div>
               
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
@@ -125,7 +125,7 @@ export default function ComingSoon() {
                   <TrendingUp className="w-6 h-6 text-last-lettuce" />
                 </div>
                 <h3 className="text-lg font-semibold text-white mb-2">Real Progress</h3>
-                <p className="text-sm text-dipped-cream/80">Track your financial growth with beautiful visualizations</p>
+                <p className="text-sm text-dipped-cream/80 hidden md:flex">Track your financial growth with beautiful visualizations</p>
               </div>
             </div>
 
