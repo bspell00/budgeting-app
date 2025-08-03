@@ -104,28 +104,28 @@ export default function ComingSoon() {
 
             {/* Features Preview */}
             <div className="mb-12 grid grid-cols-3 gap-3 sm:gap-6 max-w-3xl mx-auto">
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
-                <div className="w-12 h-12 bg-last-lettuce/30 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <DollarSign className="w-6 h-6 text-last-lettuce" />
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 bg-last-lettuce/30 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-4">
+                  <DollarSign className="w-4 h-4 sm:w-6 sm:h-6 text-last-lettuce" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Smart Budgeting</h3>
-                <p className="text-sm text-dipped-cream/80 hidden md:flex">Envelope budgeting with intelligent automation and real-time tracking</p>
+                <h3 className="text-sm sm:text-lg font-semibold text-white mb-1 sm:mb-2">Smart Budgeting</h3>
+                <p className="text-xs sm:text-sm text-dipped-cream/80 hidden md:block">Envelope budgeting with intelligent automation and real-time tracking</p>
               </div>
               
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
-                <div className="w-12 h-12 bg-last-lettuce/30 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Target className="w-6 h-6 text-last-lettuce" />
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 bg-last-lettuce/30 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-4">
+                  <Target className="w-4 h-4 sm:w-6 sm:h-6 text-last-lettuce" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">AI Insights</h3>
-                <p className="text-sm text-dipped-cream/80 hidden md:flex">Personalized recommendations and debt payoff strategies</p>
+                <h3 className="text-sm sm:text-lg font-semibold text-white mb-1 sm:mb-2">AI Insights</h3>
+                <p className="text-xs sm:text-sm text-dipped-cream/80 hidden md:block">Personalized recommendations and debt payoff strategies</p>
               </div>
               
-              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
-                <div className="w-12 h-12 bg-last-lettuce/30 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="w-6 h-6 text-last-lettuce" />
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-6 border border-last-lettuce/20 hover:shadow-lg hover:bg-white/15 transition-all duration-300">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 bg-last-lettuce/30 rounded-lg flex items-center justify-center mx-auto mb-2 sm:mb-4">
+                  <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6 text-last-lettuce" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Real Progress</h3>
-                <p className="text-sm text-dipped-cream/80 hidden md:flex">Track your financial growth with beautiful visualizations</p>
+                <h3 className="text-sm sm:text-lg font-semibold text-white mb-1 sm:mb-2">Real Progress</h3>
+                <p className="text-xs sm:text-sm text-dipped-cream/80 hidden md:block">Track your financial growth with beautiful visualizations</p>
               </div>
             </div>
 
