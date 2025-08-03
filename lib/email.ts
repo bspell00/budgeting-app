@@ -11,26 +11,79 @@ export interface EmailOptions {
 }
 
 export async function sendEmail({ to, subject, html, from }: EmailOptions) {
+  const environment = process.env.NODE_ENV || 'development';
+  
   try {
     if (!process.env.RESEND_API_KEY) {
       console.warn('⚠️ RESEND_API_KEY not configured. Email would be sent to:', to);
       console.warn('📧 Email subject:', subject);
       console.warn('🔧 Set RESEND_API_KEY environment variable to enable email sending');
+      
+      // In development, still log the email content for testing
+      if (environment === 'development') {
+        console.log('--- EMAIL CONTENT (Development) ---');
+        console.log('To:', to);
+        console.log('Subject:', subject);
+        console.log('HTML Preview:', html.substring(0, 200) + '...');
+        console.log('--- END EMAIL CONTENT ---');
+      }
+      
       return { success: false, error: 'Email service not configured - RESEND_API_KEY missing' };
     }
 
+    // Determine the appropriate FROM email based on environment
+    let fromEmail = from || process.env.FROM_EMAIL || 'onboarding@resend.dev';
+    
+    // For production, ensure we're using a verified domain
+    if (environment === 'production' && fromEmail === 'onboarding@resend.dev') {
+      console.warn('⚠️ Using default Resend email in production. Consider verifying your own domain.');
+    }
+
     const result = await resend.emails.send({
-      from: from || process.env.FROM_EMAIL || 'onboarding@resend.dev',
+      from: fromEmail,
       to: [to],
       subject,
       html,
     });
 
-    console.log('Email sent successfully:', result);
+    // Enhanced logging based on environment
+    if (environment === 'development') {
+      console.log('📧 Email sent successfully in development:', {
+        to,
+        subject,
+        emailId: result.data?.id,
+        from: fromEmail
+      });
+    } else {
+      console.log('📧 Email sent successfully:', {
+        emailId: result.data?.id,
+        environment
+      });
+    }
+
     return { success: true, id: result.data?.id };
+    
   } catch (error) {
-    console.error('Failed to send email:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Enhanced error handling for different environments
+    console.error(`❌ Failed to send email in ${environment}:`, {
+      error: errorMessage,
+      to: environment === 'development' ? to : '[redacted]',
+      subject: environment === 'development' ? subject : '[redacted]'
+    });
+
+    // Specific error handling for common Resend issues
+    if (errorMessage.includes('403') && errorMessage.includes('testing emails')) {
+      console.error('🔧 Resend is in testing mode. You can only send emails to your verified email address.');
+      console.error('💡 To send to any email: Verify a domain at resend.com/domains');
+    } else if (errorMessage.includes('401')) {
+      console.error('🔑 Authentication failed. Check your RESEND_API_KEY.');
+    } else if (errorMessage.includes('domain')) {
+      console.error('🌐 Domain verification issue. Check your Resend domain settings.');
+    }
+
+    return { success: false, error: errorMessage };
   }
 }
 

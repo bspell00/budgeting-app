@@ -16,6 +16,7 @@ import {
   Plus,
   Activity
 } from 'lucide-react';
+import { useAlert } from './ModalAlert';
 
 interface Debt {
   id: string;
@@ -74,6 +75,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
   onOpenAIChat,
   onRefreshData
 }) => {
+  const { showAlert, showSuccess, showError, showWarning } = useAlert();
   const [activePlan, setActivePlan] = useState<DebtPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -177,7 +179,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
 
   const generateSnowballPlan = async () => {
     if (debts.length === 0) {
-      alert('No debts found. Connect credit card accounts to create a debt payoff plan.');
+      showWarning('No debts found. Connect credit card accounts to create a debt payoff plan.');
       return;
     }
 
@@ -199,11 +201,11 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
         onRefreshData();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to generate plan' }));
-        alert(`Error: ${errorData.error || 'Failed to generate snowball plan'}`);
+        showError(`Error: ${errorData.error || 'Failed to generate snowball plan'}`);
       }
     } catch (error) {
       console.error('Error generating snowball plan:', error);
-      alert('Failed to generate snowball plan. Please try again.');
+      showError('Failed to generate snowball plan. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -211,7 +213,7 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
 
   const generateAvalanchePlan = async () => {
     if (debts.length === 0) {
-      alert('No debts found. Connect credit card accounts to create a debt payoff plan.');
+      showWarning('No debts found. Connect credit card accounts to create a debt payoff plan.');
       return;
     }
 
@@ -233,11 +235,11 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
         onRefreshData();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to generate plan' }));
-        alert(`Error: ${errorData.error || 'Failed to generate avalanche plan'}`);
+        showError(`Error: ${errorData.error || 'Failed to generate avalanche plan'}`);
       }
     } catch (error) {
       console.error('Error generating avalanche plan:', error);
-      alert('Failed to generate avalanche plan. Please try again.');
+      showError('Failed to generate avalanche plan. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -257,11 +259,11 @@ const DebtPayoffStrategies: React.FC<DebtPayoffStrategiesProps> = ({
         onRefreshData();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to delete plan' }));
-        alert(`Error: ${errorData.error || 'Failed to delete plan'}`);
+        showError(`Error: ${errorData.error || 'Failed to delete plan'}`);
       }
     } catch (error) {
       console.error('Error deleting plan:', error);
-      alert('Failed to delete plan. Please try again.');
+      showError('Failed to delete plan. Please try again.');
     } finally {
       setIsLoading(false);
     }

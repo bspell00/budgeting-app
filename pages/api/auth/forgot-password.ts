@@ -43,11 +43,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       // In production, add resetToken and resetTokenExpiry fields to User model
       storeResetToken(email, resetToken, resetTokenExpiry);
 
-      // Generate reset URL - ensure we have a valid base URL
+      // Generate reset URL - ensure we have a valid base URL for each environment
+      const environment = process.env.NODE_ENV || 'development';
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3001';
       const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
       
-      console.log('🔗 Generated reset URL:', resetUrl);
+      console.log(`🔗 Generated reset URL (${environment}):`, resetUrl);
       
       // Send password reset email
       const emailResult = await sendEmail({
@@ -57,13 +58,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       });
 
       if (emailResult.success) {
-        console.log(`✅ Password reset email sent to ${email}`);
+        console.log(`✅ Password reset email sent to ${email} (${environment})`);
+        if (environment === 'development') {
+          console.log(`📧 Email ID: ${emailResult.id}`);
+        }
       } else {
-        console.error(`❌ Failed to send password reset email to ${email}:`, emailResult.error);
-        // Still log the reset link for development
-        console.log('--- PASSWORD RESET LINK (Development Fallback) ---');
-        console.log(`Visit: ${resetUrl}`);
-        console.log('--- END RESET LINK ---');
+        console.error(`❌ Failed to send password reset email to ${email} (${environment}):`, emailResult.error);
+        
+        // In development, always log the reset link as fallback
+        if (environment === 'development') {
+          console.log('--- PASSWORD RESET LINK (Development Fallback) ---');
+          console.log(`Visit: ${resetUrl}`);
+          console.log('--- END RESET LINK ---');
+        } else {
+          // In staging/production, log less detail for security
+          console.error('📧 Password reset email failed. Check email service configuration.');
+        }
       }
     }
 

@@ -11,6 +11,7 @@ import {
   Zap,
   RefreshCw
 } from 'lucide-react';
+import { useAlert } from './ModalAlert';
 
 interface FinleySuggestion {
   id: string;
@@ -29,6 +30,7 @@ interface FinleySuggestsProps {
 }
 
 const FinleySuggests: React.FC<FinleySuggestsProps> = ({ userId, onRefreshData }) => {
+  const { showSuccess, showError } = useAlert();
   const [suggestions, setSuggestions] = useState<FinleySuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -130,7 +132,7 @@ const FinleySuggests: React.FC<FinleySuggestsProps> = ({ userId, onRefreshData }
         onRefreshData();
         
         // Show success message
-        alert(`✅ ${suggestion.title} executed successfully! ${result.message || ''}`);
+        showSuccess(`${suggestion.title} executed successfully! ${result.message || ''}`);
         
         // If no suggestions left, fetch new ones
         if (suggestions.length === 1) {
@@ -141,7 +143,7 @@ const FinleySuggests: React.FC<FinleySuggestsProps> = ({ userId, onRefreshData }
       }
     } catch (error) {
       console.error('Error executing suggestion:', error);
-      alert('Failed to execute suggestion. Please try again.');
+      showError('Failed to execute suggestion. Please try again.');
     } finally {
       setIsLoading(false);
     }

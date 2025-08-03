@@ -3,6 +3,7 @@ import { Trash2, PlusCircle, ArrowUpDown, Clock, CheckCircle, Check, X, Flag, Mo
 import CategorySelectionFlyout from './CategorySelectionFlyout';
 import AccountSelectionFlyout from './AccountSelectionFlyout';
 import PayeeSelectionFlyout from './PayeeSelectionFlyout';
+import { useAlert } from './ModalAlert';
 
 interface Transaction {
   id: string;
@@ -82,6 +83,7 @@ export default function TransactionList({
   onCreateCategory,
   isAccountView = false
 }: TransactionListProps) {
+  const { showAlert, showSuccess, showError, showWarning, showConfirm } = useAlert();
   const [sortBy, setSortBy] = useState<'date' | 'amount' | 'category'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
@@ -147,11 +149,27 @@ export default function TransactionList({
   const [showNewTransactionPayeeFlyout, setShowNewTransactionPayeeFlyout] = useState(false);
   const [newTransactionPayeeFlyoutPosition, setNewTransactionPayeeFlyoutPosition] = useState({ top: 0, left: 0 });
   
-  // Get unique payees from existing transactions
-  const uniquePayees = React.useMemo(() => 
-    Array.from(new Set(transactions.map(t => t.description).filter(Boolean))), 
-    [transactions]
-  );
+  // Stored payees from database
+  const [storedPayees, setStoredPayees] = useState<string[]>([]);
+  
+  // Fetch stored payees from database
+  useEffect(() => {
+    fetch('/api/payees')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.payees?.all) {
+          setStoredPayees(data.payees.all.map((p: any) => p.name));
+        }
+      })
+      .catch(err => console.error('Failed to fetch payees:', err));
+  }, []);
+  
+  // Combine stored payees with unique payees from transactions
+  const uniquePayees = React.useMemo(() => {
+    const transactionPayees = Array.from(new Set(transactions.map(t => t.description).filter(Boolean)));
+    const allPayees = [...storedPayees, ...transactionPayees];
+    return Array.from(new Set(allPayees)).filter(Boolean);
+  }, [transactions, storedPayees]);
   
 
 
@@ -368,7 +386,7 @@ export default function TransactionList({
       });
     } catch (error) {
       console.error('❌ Failed to create transaction:', error);
-      alert('Failed to create transaction. Please try again.');
+      showError('Failed to create transaction. Please try again.');
     }
   };
 
@@ -395,14 +413,14 @@ export default function TransactionList({
                                  transaction.description.toLowerCase().includes('payment to:'));
     
     if (!isCreditCardPayment) {
-      alert('This transaction does not appear to be a credit card payment.');
+      showWarning('This transaction does not appear to be a credit card payment.');
       return;
     }
 
     // Find credit card accounts
     const creditCards = accounts.filter(acc => acc.accountType === 'credit');
     if (creditCards.length === 0) {
-      alert('No credit card accounts found.');
+      showWarning('No credit card accounts found.');
       return;
     }
 
@@ -446,10 +464,10 @@ export default function TransactionList({
           accountId: targetCreditCard.id
         });
       }
-      alert(`Credit card transfer created successfully to ${targetCreditCard.accountName}!`);
+      showSuccess(`Credit card transfer created successfully to ${targetCreditCard.accountName}!`);
     } catch (error) {
       console.error('❌ Failed to create credit card payment transfer:', error);
-      alert('Failed to create credit card transfer. Please try again.');
+      showError('Failed to create credit card transfer. Please try again.');
     }
   };
 

@@ -16,6 +16,7 @@ import DebtPayoffStrategies from './DebtPayoffStrategies';
 import { useDashboard } from '../hooks/useDashboard';
 import { useTransactions } from '../hooks/useTransactions';
 import { useAccounts } from '../hooks/useAccounts';
+import { useAlert } from './ModalAlert';
 import { 
   PlusCircle, 
   Target, 
@@ -55,6 +56,7 @@ import FinleySuggests from './FinleySuggests';
 const Dashboard = () => {
   const { data: session } = useSession();
   const router = useRouter();
+  const { showAlert, showSuccess, showError, showWarning, showConfirm } = useAlert();
   
   // Local UI state (declare before SWR hooks that depend on them)
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -349,7 +351,7 @@ const Dashboard = () => {
             if (response.ok) {
               // Refresh dashboard data to show new goal
               await fetchDashboardData();
-              alert(`Debt payoff goal for $${amount} created successfully!`);
+              showSuccess(`Debt payoff goal for $${amount} created successfully!`);
               dismissInsight(aiSuggestions.findIndex(s => s.id === insight.id));
               return;
             } else {
@@ -357,19 +359,19 @@ const Dashboard = () => {
             }
           } catch (error) {
             console.error('Error creating debt goal:', error);
-            alert('Failed to create debt payoff goal. Please try manually.');
+            showError('Failed to create debt payoff goal. Please try manually.');
             return;
           }
         }
       }
       
       // Fallback for actions we haven't implemented yet
-      alert(`Action "${insight.action}" executed successfully!`);
+      showSuccess(`Action "${insight.action}" executed successfully!`);
       dismissInsight(aiSuggestions.findIndex(s => s.id === insight.id));
       
     } catch (error) {
       console.error('Error executing insight action:', error);
-      alert('Failed to execute action. Please try again.');
+      showError('Failed to execute action. Please try again.');
     }
   };
 
@@ -503,7 +505,7 @@ const Dashboard = () => {
       console.error('Error assigning money:', error);
       
       // SWR automatically handles rollback on errors
-      alert('Failed to assign money. Please try again.');
+      showError('Failed to assign money. Please try again.');
     }
   };
 
@@ -566,7 +568,7 @@ const Dashboard = () => {
       console.error('Error moving money:', error);
       
       // SWR automatically handles rollback on errors
-      alert('Failed to move money. Please try again.');
+      showError('Failed to move money. Please try again.');
     }
   };
 
@@ -610,7 +612,7 @@ const Dashboard = () => {
       setShowDropdown(false);
     } catch (error) {
       console.error('Error updating transaction category:', error);
-      alert('Failed to update category. Please try again.');
+      showError('Failed to update category. Please try again.');
     }
   };
 
@@ -620,7 +622,7 @@ const Dashboard = () => {
       setShowBudgetModal(false);
     } catch (error) {
       console.error('Error creating budget:', error);
-      alert('Failed to create budget. Please try again.');
+      showError('Failed to create budget. Please try again.');
     }
   };
 
@@ -630,7 +632,7 @@ const Dashboard = () => {
       await createTransactionOptimistic(transactionData, finalAccounts);
     } catch (error) {
       console.error('Error creating transaction:', error);
-      alert('Failed to create transaction. Please try again.');
+      showError('Failed to create transaction. Please try again.');
     }
   };
 
@@ -640,7 +642,7 @@ const Dashboard = () => {
       await createCreditCardPaymentTransfer(checkingData, creditCardData, finalAccounts);
     } catch (error) {
       console.error('Error creating credit card payment transfer:', error);
-      alert('Failed to create credit card payment transfer. Please try again.');
+      showError('Failed to create credit card payment transfer. Please try again.');
     }
   };
 
@@ -650,7 +652,7 @@ const Dashboard = () => {
       await deleteTransactionOptimistic(transactionId);
     } catch (error) {
       console.error('Error deleting transaction:', error);
-      alert('Failed to delete transaction. Please try again.');
+      showError('Failed to delete transaction. Please try again.');
     }
   };
 
@@ -660,7 +662,7 @@ const Dashboard = () => {
       await toggleClearedOptimistic(transactionId, cleared);
     } catch (error) {
       console.error('Error updating transaction:', error);
-      alert('Failed to update transaction. Please try again.');
+      showError('Failed to update transaction. Please try again.');
     }
   };
 
@@ -670,7 +672,7 @@ const Dashboard = () => {
       await updateTransactionOptimistic(transactionId, updates);
     } catch (error) {
       console.error('Error updating transaction:', error);
-      alert('Failed to update transaction. Please try again.');
+      showError('Failed to update transaction. Please try again.');
     }
   };
 
@@ -707,13 +709,13 @@ const Dashboard = () => {
       
       // Show success message 
       if (selectedBudget) {
-        alert(`Goal "${goalData.name}" created for budget "${selectedBudget.name}"! The goal will track this budget's progress toward your target.`);
+        showSuccess(`Goal "${goalData.name}" created for budget "${selectedBudget.name}"! The goal will track this budget's progress toward your target.`);
       } else {
-        alert(`Goal "${goalData.name}" created successfully! A corresponding budget has been added to track your progress.`);
+        showSuccess(`Goal "${goalData.name}" created successfully! A corresponding budget has been added to track your progress.`);
       }
     } catch (error) {
       console.error('Error creating goal:', error);
-      alert(`Failed to create goal: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(`Failed to create goal: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -723,7 +725,7 @@ const Dashboard = () => {
       await updateBudgetOptimistic(id, updates);
     } catch (error) {
       console.error('Error updating budget:', error);
-      alert(`Failed to update budget: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showError(`Failed to update budget: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -736,7 +738,7 @@ const Dashboard = () => {
       await deleteBudgetOptimistic(id);
     } catch (error) {
       console.error('Error deleting budget:', error);
-      alert('Failed to delete budget. Please try again.');
+      showError('Failed to delete budget. Please try again.');
     }
   };
 
@@ -750,15 +752,15 @@ const Dashboard = () => {
       const data = await response.json();
       
       if (data.success) {
-        alert(`Successfully synced! ${data.newTransactions} new transactions found.`);
+        showSuccess(`Successfully synced! ${data.newTransactions} new transactions found.`);
         // Refresh dashboard data
         window.location.reload();
       } else {
-        alert('Failed to sync accounts. Please try again.');
+        showError('Failed to sync accounts. Please try again.');
       }
     } catch (error) {
       console.error('Error syncing accounts:', error);
-      alert('Failed to sync accounts. Please try again.');
+      showError('Failed to sync accounts. Please try again.');
     } finally {
       setLocalLoading(false);
     }
@@ -771,7 +773,7 @@ const Dashboard = () => {
     setShowAccountTypeModal(false);
     
     // Show success message
-    alert(`Successfully connected! ${data.accounts || 0} accounts and ${data.transactions || 0} transactions imported.`);
+    showSuccess(`Successfully connected! ${data.accounts || 0} accounts and ${data.transactions || 0} transactions imported.`);
     
     // Hot reload to show new accounts and transactions immediately
     console.log('🔄 Starting hot reload after Plaid connection...');
@@ -782,7 +784,7 @@ const Dashboard = () => {
   const handlePlaidExit = (error: any, metadata: any) => {
     console.log('Plaid connection exited:', error, metadata);
     if (error) {
-      alert('Failed to connect bank account. Please try again.');
+      showError('Failed to connect bank account. Please try again.');
     }
   };
 
@@ -799,15 +801,15 @@ const Dashboard = () => {
       const result = await response.json();
       
       if (result.success) {
-        alert(`Account "${accountData.accountName}" added successfully!`);
+        showSuccess(`Account "${accountData.accountName}" added successfully!`);
         setShowAccountModal(false);
         window.location.reload(); // Refresh to show new account
       } else {
-        alert('Failed to add account. Please try again.');
+        showError('Failed to add account. Please try again.');
       }
     } catch (error) {
       console.error('Error adding manual account:', error);
-      alert('Failed to add account. Please try again.');
+      showError('Failed to add account. Please try again.');
     }
   };
 
@@ -860,7 +862,7 @@ const Dashboard = () => {
             : transaction
         )
       );
-      alert('Failed to flag transactions. Please try again.');
+      showError('Failed to flag transactions. Please try again.');
     }
   };
 
@@ -914,7 +916,7 @@ const Dashboard = () => {
             : transaction
         )
       );
-      alert('Failed to flag transaction. Please try again.');
+      showError('Failed to flag transaction. Please try again.');
     }
   };
 
@@ -974,7 +976,7 @@ const Dashboard = () => {
             : transaction
         )
       );
-      alert('Failed to update approval status. Please try again.');
+      showError('Failed to update approval status. Please try again.');
     }
   };
 
@@ -1010,7 +1012,7 @@ const Dashboard = () => {
 
     } catch (error) {
       console.error('Error creating category:', error);
-      alert('Failed to create category. Please try again.');
+      showError('Failed to create category. Please try again.');
     }
   };
 
@@ -1141,7 +1143,7 @@ const Dashboard = () => {
         fetchAccountTransactions(selectedAccount.id);
       }
       
-      alert('Failed to move transactions. Please try again.');
+      showError('Failed to move transactions. Please try again.');
     }
   };
 

@@ -8,6 +8,7 @@ import AIInsights from './AIInsights';
 import ChartsModal from './Charts';
 import ChartsContent from './ChartsContent';
 import QuickStats from './QuickStats';
+import { useAlert } from './ModalAlert';
 import { 
   PlusCircle, 
   Target, 
@@ -30,6 +31,7 @@ import {
 
 const Dashboard = () => {
   const { data: session } = useSession();
+  const { showError } = useAlert();
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -109,7 +111,7 @@ const Dashboard = () => {
       setDashboardData(updatedData);
     } catch (error) {
       console.error('Error creating budget:', error);
-      alert('Failed to create budget. Please try again.');
+      showError('Failed to create budget. Please try again.');
     }
   };
 
@@ -140,7 +142,7 @@ const Dashboard = () => {
       setTransactions(transactionsData);
     } catch (error) {
       console.error('Error creating transaction:', error);
-      alert('Failed to create transaction. Please try again.');
+      showError('Failed to create transaction. Please try again.');
     }
   };
 
@@ -167,7 +169,7 @@ const Dashboard = () => {
       setTransactions(transactionsData);
     } catch (error) {
       console.error('Error deleting transaction:', error);
-      alert('Failed to delete transaction. Please try again.');
+      showError('Failed to delete transaction. Please try again.');
     }
   };
 
@@ -191,7 +193,7 @@ const Dashboard = () => {
       setDashboardData(updatedData);
     } catch (error) {
       console.error('Error creating goal:', error);
-      alert('Failed to create goal. Please try again.');
+      showError('Failed to create goal. Please try again.');
     }
   };
 

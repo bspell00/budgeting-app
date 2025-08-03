@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, AlertCircle, CheckCircle, DollarSign, CreditCard } from 'lucide-react';
 import { useAccounts } from '../hooks/useAccounts';
 import { useTransactions } from '../hooks/useTransactions';
+import { useAlert } from './ModalAlert';
 
 interface Account {
   id: string;
@@ -25,6 +26,7 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
   account,
   onAccountClosed
 }) => {
+  const { showError, showWarning } = useAlert();
   const [loading, setLoading] = useState(false);
   
   // Use optimistic hooks
@@ -55,7 +57,7 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
       await handleCloseAccountWithSkip();
     } catch (error) {
       console.error('Error creating adjustment:', error);
-      alert(`Failed to create balance adjustment: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+      showError(`Failed to create balance adjustment: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
     } finally {
       setLoading(false);
     }
@@ -73,9 +75,9 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
     } catch (error: any) {
       console.error('Error closing account:', error);
       if (error.message?.includes('reconciliation') || error.message?.includes('balance')) {
-        alert(error.message || 'Account must have $0 balance before closing.');
+        showWarning(error.message || 'Account must have $0 balance before closing.');
       } else {
-        alert(`Failed to close account: ${error.message || 'Unknown error'}. Please try again.`);
+        showError(`Failed to close account: ${error.message || 'Unknown error'}. Please try again.`);
       }
     } finally {
       setLoading(false);
@@ -92,7 +94,7 @@ const AccountClosureModal: React.FC<AccountClosureModalProps> = ({
       onClose();
     } catch (error) {
       console.error('Error closing account after adjustment:', error);
-      alert('Failed to close account. Please try again.');
+      showError('Failed to close account. Please try again.');
       throw error; // Re-throw so the loading state gets cleared properly
     }
   };

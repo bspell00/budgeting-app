@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { useAlert } from './ModalAlert';
 
 interface GoalModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface GoalModalProps {
 }
 
 export default function GoalModal({ isOpen, onClose, onSubmit }: GoalModalProps) {
+  const { showError } = useAlert();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
@@ -42,7 +44,7 @@ export default function GoalModal({ isOpen, onClose, onSubmit }: GoalModalProps)
       setTargetDate('');
     } catch (error) {
       console.error('Error creating goal:', error);
-      alert('Failed to create goal. Please try again.');
+      showError('Failed to create goal. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

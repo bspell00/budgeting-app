@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, CreditCard, DollarSign, Zap, Clock, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { useAlert } from './ModalAlert';
 
 interface BudgetTransfer {
   id: string;
@@ -29,6 +30,7 @@ interface CreditCardAutomationProps {
 }
 
 export default function CreditCardAutomation({ transactionId }: CreditCardAutomationProps) {
+  const { showSuccess, showError } = useAlert();
   const [transfers, setTransfers] = useState<BudgetTransfer[]>([]);
   const [loading, setLoading] = useState(false);
   const [triggerLoading, setTriggerLoading] = useState(false);
@@ -77,14 +79,14 @@ export default function CreditCardAutomation({ transactionId }: CreditCardAutoma
       const result = await response.json();
       
       if (result.success) {
-        alert(`Automation successful: ${result.message}`);
+        showSuccess(`Automation successful: ${result.message}`);
         fetchTransfers(); // Refresh transfers list
       } else {
-        alert(`Automation failed: ${result.message}`);
+        showError(`Automation failed: ${result.message}`);
       }
     } catch (error) {
       console.error('Error triggering automation:', error);
-      alert('Failed to trigger automation');
+      showError('Failed to trigger automation');
     } finally {
       setTriggerLoading(false);
     }
