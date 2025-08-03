@@ -11,7 +11,8 @@ export interface EmailOptions {
 }
 
 export async function sendEmail({ to, subject, html, from }: EmailOptions) {
-  const environment = process.env.NODE_ENV || 'development';
+  // Use custom ENVIRONMENT variable for proper staging detection
+  const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || 'development';
   
   try {
     if (!process.env.RESEND_API_KEY) {

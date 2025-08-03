@@ -44,7 +44,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       storeResetToken(email, resetToken, resetTokenExpiry);
 
       // Generate reset URL - ensure we have a valid base URL for each environment
-      const environment = process.env.NODE_ENV || 'development';
+      // Use custom ENVIRONMENT variable for proper staging detection
+      const environment = process.env.ENVIRONMENT || process.env.NODE_ENV || 'development';
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3001';
       const resetUrl = `${baseUrl}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
       
