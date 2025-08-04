@@ -1,0 +1,33 @@
+
+> zero-based-budgeting-app@1.0.0 dev
+> node scripts/deploy.js && next dev -p 3001
+
+🔧 Setting up database schema...
+📍 Environment: DEVELOPMENT
+✅ Using SQLite schema for development
+🔄 Generating Prisma client...
+Environment variables loaded from .env
+Prisma schema loaded from prisma/schema.prisma
+┌─────────────────────────────────────────────────────────┐
+│  Update available 6.12.0 -> 6.13.0                      │
+│  Run the following to update                            │
+│    npm i --save-dev prisma@latest                       │
+│    npm i @prisma/client@latest                          │
+└─────────────────────────────────────────────────────────┘
+
+✔ Generated Prisma Client (v6.12.0) to ./node_modules/@prisma/client in 69ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+✅ Schema setup complete!
+  ▲ Next.js 14.2.30
+  - Local:        http://localhost:3001
+  - Environments: .env.development, .env
+
+ ✓ Starting...
+ ⚠ Duplicate page detected. pages/api/payees.ts and pages/api/payees/index.ts resolve to /api/payees
+ ⚠ Duplicate page detected. pages/api/payees.ts and pages/api/payees/index.ts resolve to /api/payees
+ ✓ Ready in 1205ms
+[?25h
