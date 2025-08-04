@@ -1,9 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../lib/auth';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../../lib/prisma';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -73,8 +71,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   } catch (error) {
     console.error('Error executing suggestion:', error);
     return res.status(500).json({ error: 'Failed to execute suggestion' });
-  } finally {
-    await prisma.$disconnect();
   }
 }
 
@@ -104,38 +100,45 @@ async function executeBudgetOptimization(userId: string, data: any) {
 }
 
 async function executeSavingsBoost(userId: string, data: any) {
-  const { suggestedMonthly } = data;
+  const { suggestedMonthly, targetAmount, currentAmount } = data;
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
   
-  // Create or update Emergency Fund budget
+  const monthlyAmount = Math.round(suggestedMonthly);
+  
+  // Create or update Emergency Fund budget for current month
   const existingBudget = await prisma.budget.findFirst({
     where: { 
       userId, 
       name: { contains: 'Emergency' },
-      category: 'Savings'
+      category: 'Savings',
+      month: currentMonth,
+      year: currentYear
     }
   });
   
   if (existingBudget) {
     await prisma.budget.update({
       where: { id: existingBudget.id },
-      data: { amount: existingBudget.amount + suggestedMonthly }
+      data: { amount: existingBudget.amount + monthlyAmount }
     });
   } else {
     await prisma.budget.create({
       data: {
         userId,
         name: 'Emergency Fund',
-        amount: suggestedMonthly,
+        amount: monthlyAmount,
         spent: 0,
         category: 'Savings',
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear()
+        month: currentMonth,
+        year: currentYear
       }
     });
   }
   
+  const targetFormatted = targetAmount ? `$${Math.round(targetAmount)}` : '3 months of expenses';
   return {
-    message: `Emergency fund savings increased by $${suggestedMonthly.toFixed(2)}/month`
+    message: `Emergency fund savings set to $${monthlyAmount}/month! Working toward ${targetFormatted} target.`
   };
 }
 
@@ -192,46 +195,74 @@ async function executeDebtStrategy(userId: string, data: any) {
 }
 
 async function executeSpendingAlert(userId: string, data: any) {
-  const { category, suggestedLimit } = data;
+  const { category, suggestedLimit, monthlyAmount } = data;
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
   
   // Find or create budget for this category
   const existingBudget = await prisma.budget.findFirst({
     where: { 
       userId,
       name: category,
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear()
+      month: currentMonth,
+      year: currentYear
     }
   });
+  
+  const budgetAmount = Math.round(suggestedLimit);
   
   if (existingBudget) {
     await prisma.budget.update({
       where: { id: existingBudget.id },
-      data: { amount: suggestedLimit }
+      data: { amount: budgetAmount }
     });
   } else {
+    // Determine appropriate category group
+    const categoryGroup = getCategoryGroup(category);
+    
     await prisma.budget.create({
       data: {
         userId,
         name: category,
-        amount: suggestedLimit,
+        amount: budgetAmount,
         spent: 0,
-        category: 'Discretionary Spending',
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear()
+        category: categoryGroup,
+        month: currentMonth,
+        year: currentYear
       }
     });
   }
   
+  const reduction = Math.round((monthlyAmount || suggestedLimit) - suggestedLimit);
   return {
-    message: `Spending limit set! ${category} budget limited to $${suggestedLimit.toFixed(2)}/month`
+    message: `Budget created for ${category}! Set limit to $${budgetAmount}/month (${reduction > 0 ? `reducing spending by $${reduction}` : 'based on current spending'})`
   };
 }
 
-async function executeGoalAccelerator(userId: string, data: any) {
-  const { goalId, suggestedBoost } = data;
+function getCategoryGroup(categoryName: string): string {
+  const category = categoryName.toLowerCase();
   
-  // Update the goal's current amount
+  if (category.includes('food') || category.includes('dining') || category.includes('restaurant') || category.includes('grocery')) {
+    return 'Food & Dining';
+  } else if (category.includes('transport') || category.includes('gas') || category.includes('uber') || category.includes('parking')) {
+    return 'Transportation';
+  } else if (category.includes('entertainment') || category.includes('movie') || category.includes('streaming')) {
+    return 'Entertainment';
+  } else if (category.includes('shopping') || category.includes('retail') || category.includes('clothing')) {
+    return 'Shopping';
+  } else if (category.includes('health') || category.includes('medical') || category.includes('pharmacy')) {
+    return 'Healthcare';
+  } else {
+    return 'Discretionary Spending';
+  }
+}
+
+async function executeGoalAccelerator(userId: string, data: any) {
+  const { goalId, goalName, suggestedBoost, monthsToComplete } = data;
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  
+  // Verify the goal exists
   const goal = await prisma.goal.findFirst({
     where: { id: goalId, userId }
   });
@@ -240,41 +271,40 @@ async function executeGoalAccelerator(userId: string, data: any) {
     throw new Error('Goal not found');
   }
   
-  await prisma.goal.update({
-    where: { id: goalId },
-    data: { currentAmount: goal.currentAmount + suggestedBoost }
-  });
+  const monthlyAmount = Math.round(suggestedBoost);
   
-  // Create or update goal budget
-  const goalBudgetName = `${goal.name} Savings`;
+  // Create or update goal savings budget for current month
+  const goalBudgetName = `${goalName} Savings`;
   const existingBudget = await prisma.budget.findFirst({
     where: { 
       userId,
-      name: { contains: goal.name },
-      category: 'Savings'
+      name: { contains: goalName },
+      category: 'Savings',
+      month: currentMonth,
+      year: currentYear
     }
   });
   
   if (existingBudget) {
     await prisma.budget.update({
       where: { id: existingBudget.id },
-      data: { amount: existingBudget.amount + suggestedBoost }
+      data: { amount: existingBudget.amount + monthlyAmount }
     });
   } else {
     await prisma.budget.create({
       data: {
         userId,
         name: goalBudgetName,
-        amount: suggestedBoost,
+        amount: monthlyAmount,
         spent: 0,
         category: 'Savings',
-        month: new Date().getMonth() + 1,
-        year: new Date().getFullYear()
+        month: currentMonth,
+        year: currentYear
       }
     });
   }
   
   return {
-    message: `Goal accelerated! Added $${suggestedBoost.toFixed(2)}/month to ${goal.name}`
+    message: `Goal accelerated! Added $${monthlyAmount}/month to ${goalName}. On track to complete in ${monthsToComplete} months.`
   };
 }
