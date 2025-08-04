@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
 import { getCategoryGroup, isPredefinedCategory, getAllBudgetCategories } from './default-budgets';
-
-const prisma = new PrismaClient();
+import prisma from './prisma';
 
 // Removed CreditCardTransferResult - using BudgetAssignmentResult for all automation
 
@@ -143,7 +141,7 @@ export class CreditCardAutomation {
     }
 
     // Default to a predefined category if available
-    return 'Entertainment'; // Default fallback category
+    return 'Needs a Category'; // Default fallback category
   }
 
   /**

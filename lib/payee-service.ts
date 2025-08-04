@@ -88,7 +88,7 @@ export class PayeeService {
     }
 
     return await this.getOrCreatePayee(userId, payeeName, {
-      category: category || 'General'
+      category: category || 'Needs a Category'
     });
   }
 

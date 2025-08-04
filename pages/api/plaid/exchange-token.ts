@@ -1,10 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
-import { PrismaClient } from '@prisma/client';
 import { PayeeService } from '../../../lib/payee-service';
-
-const prisma = new PrismaClient();
+import prisma from '../../../lib/prisma';
 
 const PLAID_BASE_URLS = {
   sandbox: 'https://sandbox.plaid.com',
@@ -31,7 +29,7 @@ function categorizeTransaction(transactionName: string, categories: string[]): s
     return 'Transfer';
   }
   
-  return 'General';
+  return 'Needs a Category';
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

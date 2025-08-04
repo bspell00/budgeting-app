@@ -2,11 +2,9 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
 import { PlaidApi, Configuration, PlaidEnvironments, TransactionsGetRequest, AccountsGetRequest } from 'plaid';
-import { PrismaClient } from '@prisma/client';
 import CreditCardAutomation from '../../../lib/credit-card-automation';
 import { SecureAccountService, SecurityAuditService, SecureTransactionService } from '../../../lib/secure-data';
-
-const prisma = new PrismaClient();
+import prisma from '../../../lib/prisma';
 
 const configuration = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments],
