@@ -25,7 +25,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "WebFetch(domain:budgeting-app-staging-29118750c1e6.herokuapp.com)"
+      "WebFetch(domain:budgeting-app-staging-29118750c1e6.herokuapp.com)",
+      "Bash(heroku logs:*)"
     ],
     "deny": []
   }
