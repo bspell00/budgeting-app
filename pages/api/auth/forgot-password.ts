@@ -1,11 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { withSecurity, validateInput } from '../../../lib/security-middleware';
 import { sendEmail, generatePasswordResetEmail } from '../../../lib/email';
 import { storeResetToken } from '../../../lib/temp-token-store';
-
-const prisma = new PrismaClient();
+import prisma from '../../../lib/prisma';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
