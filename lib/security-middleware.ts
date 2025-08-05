@@ -2,6 +2,12 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
 import { SecurityAuditService } from './secure-data';
+import { 
+  addProductionSecurityHeaders, 
+  enhancedRateLimit, 
+  createSecureAuditLog,
+  sanitizeForAPI 
+} from './security-enhancements';
 
 // Simple in-memory rate limiter (use Redis in production)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -32,14 +38,24 @@ export function withSecurity(
       } = config;
 
       try {
-        // Add security headers
-        addSecurityHeaders(res);
+        // Add enhanced security headers
+        if (process.env.NODE_ENV === 'production') {
+          addProductionSecurityHeaders(res);
+        } else {
+          addSecurityHeaders(res);
+        }
 
         // Get client IP for rate limiting
         const clientIP = getClientIP(req);
         
-        // Apply rate limiting
-        if (!checkRateLimit(clientIP, rateLimit)) {
+        // Apply enhanced rate limiting
+        const rateLimitResult = enhancedRateLimit(
+          clientIP, 
+          rateLimit.maxRequests, 
+          rateLimit.windowMs
+        );
+        
+        if (!rateLimitResult.allowed) {
           await SecurityAuditService.logSecurityEvent({
             action: 'RATE_LIMIT_EXCEEDED',
             resource: req.url || 'unknown',
@@ -50,7 +66,8 @@ export function withSecurity(
           
           return res.status(429).json({ 
             error: 'Too many requests. Please try again later.',
-            retryAfter: Math.ceil(rateLimit.windowMs / 1000)
+            retryAfter: Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000),
+            remaining: rateLimitResult.remaining
           });
         }
 
