@@ -5,437 +5,139 @@ const fetcher = (url: string) => fetch(url).then(res => res.json());
 export function useTransactions(accountId?: string) {
   const key = accountId ? `/api/transactions?accountId=${accountId}` : '/api/transactions';
   
-  console.log('🔍 useTransactions called with:', { 
+  console.log('🔍 useTransactions LOCAL called with:', { 
     accountId: accountId, 
     key: key,
     accountIdType: typeof accountId 
   });
   
   const { data, error, isLoading } = useSWR(key, fetcher, {
-    refreshInterval: 15000, // Refresh every 15 seconds
+    refreshInterval: 1000, // 1 second for local development
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
-    dedupingInterval: 2000,
   });
-  
-  console.log('🔍 useTransactions SWR result:', { 
-    key: key,
+
+  console.log('🔍 useTransactions LOCAL SWR result:', {
+    key,
     dataExists: !!data,
     transactionCount: data?.transactions?.length || 0,
-    error: error,
-    isLoading: isLoading 
+    error: error?.message,
+    isLoading
   });
 
-  // Bulk optimistic update for multiple transaction category changes (for AI categorization)
-  const updateMultipleTransactionsOptimistic = async (transactionIds: string[], updates: any) => {
-    const currentData = data;
-    if (!currentData || !transactionIds.length) return;
-
-    console.log('🔄 Updating multiple transactions optimistically:', transactionIds, updates);
-
-    // Create optimistic update for multiple transactions
-    const optimisticData = {
-      ...currentData,
-      transactions: currentData.transactions?.map((transaction: any) => {
-        if (transactionIds.includes(transaction.id)) {
-          return { ...transaction, ...updates };
-        }
-        return transaction;
-      })
-    };
-
-    // Update multiple cache keys to handle different views
-    mutate(key, optimisticData, false);
-    mutate('/api/transactions', (cachedData: any) => {
-      if (cachedData?.transactions) {
-        return {
-          ...cachedData,
-          transactions: cachedData.transactions.map((transaction: any) => {
-            if (transactionIds.includes(transaction.id)) {
-              return { ...transaction, ...updates };
-            }
-            return transaction;
-          })
-        };
-      }
-      return cachedData;
-    }, false);
-
-    // Update all account-specific caches
-    mutate((cacheKey) => {
-      return typeof cacheKey === 'string' && cacheKey.startsWith('/api/transactions?accountId=');
-    }, (cachedData: any) => {
-      if (cachedData?.transactions) {
-        return {
-          ...cachedData,
-          transactions: cachedData.transactions.map((transaction: any) => {
-            if (transactionIds.includes(transaction.id)) {
-              return { ...transaction, ...updates };
-            }
-            return transaction;
-          })
-        };
-      }
-      return cachedData;
-    }, false);
-
-    // Return immediately for optimistic UI update - no need to make API calls here
-    // as this is meant to be called after AI function execution
-    console.log('✅ Multiple transactions updated optimistically');
-    
-    // Refresh caches to get real data from server
-    setTimeout(() => {
-      mutate(key);
-      mutate('/api/transactions');
-      mutate((key) => typeof key === 'string' && key.startsWith('/api/transactions?accountId='));
-      if (updates.category) {
-        mutate('/api/dashboard');
-      }
-    }, 100);
-  };
-
-  // Optimistic update for transaction category changes
+  // Simple transaction update with immediate refresh
   const updateTransactionOptimistic = async (transactionId: string, updates: any) => {
-    const currentData = data;
-    if (!currentData) return;
-
-    console.log('✏️ Updating transaction optimistically:', transactionId, updates);
-
-    // Create optimistic update
-    const optimisticData = {
-      ...currentData,
-      transactions: currentData.transactions?.map((transaction: any) => {
-        if (transaction.id === transactionId) {
-          return { ...transaction, ...updates };
-        }
-        return transaction;
-      })
-    };
-
-    // Update multiple cache keys to handle different views
-    mutate(key, optimisticData, false);
-    mutate('/api/transactions', (cachedData: any) => {
-      if (cachedData?.transactions) {
-        return {
-          ...cachedData,
-          transactions: cachedData.transactions.map((transaction: any) => {
-            if (transaction.id === transactionId) {
-              return { ...transaction, ...updates };
-            }
-            return transaction;
-          })
-        };
-      }
-      return cachedData;
-    }, false);
-
-    try {
-      // Make API call based on update type
-      let response;
-      if (updates.category) {
-        response = await fetch('/api/transactions/update-category', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            transactionId, 
-            category: updates.category 
-          }),
-        });
-      } else {
-        response = await fetch('/api/transactions', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: transactionId, ...updates }),
-        });
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to update transaction' }));
-        throw new Error(errorData.error || 'Failed to update transaction');
-      }
-
-      console.log('✅ Transaction updated successfully:', transactionId);
-
-      // Force revalidate all transaction caches to get real data from server
-      mutate(key);
-      mutate('/api/transactions');
-      // Also invalidate account-specific transaction caches
-      mutate((key) => typeof key === 'string' && key.startsWith('/api/transactions?accountId='));
-      
-      // Also refresh dashboard if category changed (affects budgets)
-      if (updates.category) {
-        mutate('/api/dashboard');
-      }
-    } catch (error) {
-      console.error('❌ Failed to update transaction:', error);
-      // Revert optimistic update on error
-      mutate(key, currentData, false);
-      mutate('/api/transactions');
-      throw error;
-    }
-  };
-
-  // Optimistic update for creating transactions
-  const createTransactionOptimistic = async (transactionData: any, accounts?: any[]) => {
-    console.log('🔄 Creating transaction optimistically:', transactionData);
-
-    // Get account info for proper display
-    const targetAccount = accounts?.find(acc => acc.id === transactionData.accountId);
-    console.log('🏦 Target account for transaction:', targetAccount ? { id: targetAccount.id, name: targetAccount.accountName, type: targetAccount.accountType } : 'not found');
+    console.log('✏️ LOCAL: Updating transaction:', transactionId, updates);
     
-    // Create temporary transaction with optimistic ID and proper account info
-    const tempTransaction = {
-      id: `temp-${Date.now()}-${Math.random()}`,
-      ...transactionData,
-      date: new Date(transactionData.date),
-      cleared: true, // Manual transactions are cleared
-      approved: true,
-      isManual: true,
-      account: targetAccount ? {
-        id: targetAccount.id,
-        accountName: targetAccount.accountName,
-        accountType: targetAccount.accountType
-      } : { id: transactionData.accountId, accountName: 'Loading...', accountType: 'unknown' },
-    };
-
-    console.log('📤 Temp transaction created:', tempTransaction);
-
-    // Helper function to add transaction to cache data
-    const addTransactionToCache = (cacheData: any) => {
-      if (!cacheData?.transactions) return cacheData;
-      return {
-        ...cacheData,
-        transactions: [tempTransaction, ...cacheData.transactions]
-      };
-    };
-
-    // Update ALL possible cache keys optimistically
-    const currentData = data;
-    if (currentData) {
-      mutate(key, addTransactionToCache(currentData), false);
-    }
-    
-    // Update general transactions cache
-    mutate('/api/transactions', addTransactionToCache, false);
-    
-    // Update specific account cache
-    const accountCacheKey = `/api/transactions?accountId=${transactionData.accountId}`;
-    console.log('🔄 Updating account cache:', accountCacheKey);
-    mutate(accountCacheKey, addTransactionToCache, false);
-    
-    // Update all account-specific caches (in case the transaction affects multiple views)
-    console.log('🔄 Updating all account-specific caches');
-    mutate((cacheKey) => {
-      const shouldUpdate = typeof cacheKey === 'string' && cacheKey.startsWith('/api/transactions?accountId=');
-      if (shouldUpdate) {
-        console.log('🔄 Updating cache key:', cacheKey);
-      }
-      return shouldUpdate;
-    }, addTransactionToCache, false);
-
     try {
-      // Make API call
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(transactionData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to create transaction' }));
-        throw new Error(errorData.error || 'Failed to create transaction');
-      }
-
-      const createdTransaction = await response.json();
-      console.log('✅ Transaction created successfully:', createdTransaction);
-
-      // Force revalidate all transaction caches to get real data from server
-      // This will replace the temporary transaction with the real one
-      setTimeout(() => {
-        mutate(key);
-        mutate('/api/transactions');
-        mutate(`/api/transactions?accountId=${transactionData.accountId}`);
-        mutate((cacheKey) => {
-          return typeof cacheKey === 'string' && cacheKey.startsWith('/api/transactions?accountId=');
-        });
-        mutate('/api/dashboard'); // Refresh dashboard too
-      }, 100);
-      
-      return createdTransaction;
-    } catch (error) {
-      console.error('❌ Failed to create transaction:', error);
-      
-      // Revert optimistic update on error by removing the temp transaction
-      const revertTransaction = (cacheData: any) => {
-        if (!cacheData?.transactions) return cacheData;
-        return {
-          ...cacheData,
-          transactions: cacheData.transactions.filter((txn: any) => txn.id !== tempTransaction.id)
-        };
-      };
-      
-      mutate(key, revertTransaction, false);
-      mutate('/api/transactions', revertTransaction, false);
-      mutate(`/api/transactions?accountId=${transactionData.accountId}`, revertTransaction, false);
-      mutate((cacheKey) => {
-        return typeof cacheKey === 'string' && cacheKey.startsWith('/api/transactions?accountId=');
-      }, revertTransaction, false);
-      
-      throw error;
-    }
-  };
-
-  // Optimistic update for deleting transactions
-  const deleteTransactionOptimistic = async (transactionId: string) => {
-    const currentData = data;
-    if (!currentData) return;
-
-    console.log('🗑️ Deleting transaction optimistically:', transactionId);
-
-    // Remove from optimistic data
-    const optimisticData = {
-      ...currentData,
-      transactions: currentData.transactions?.filter((txn: any) => txn.id !== transactionId) || []
-    };
-
-    // Update multiple cache keys to handle different views
-    mutate(key, optimisticData, false);
-    mutate('/api/transactions', (cachedData: any) => {
-      if (cachedData?.transactions) {
-        return {
-          ...cachedData,
-          transactions: cachedData.transactions.filter((txn: any) => txn.id !== transactionId)
-        };
-      }
-      return cachedData;
-    }, false);
-
-    try {
-      // Make API call
-      const response = await fetch(`/api/transactions?id=${transactionId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to delete transaction' }));
-        throw new Error(errorData.error || 'Failed to delete transaction');
-      }
-
-      const deletionResult = await response.json();
-      console.log('✅ Transaction deleted successfully:', {
-        transactionId,
-        deletedTransactions: deletionResult.deletedTransactions,
-        pairedTransactionDeleted: deletionResult.pairedTransactionDeleted
-      });
-
-      // If a paired transaction was deleted, we need to ensure our optimistic updates handle both
-      if (deletionResult.pairedTransactionDeleted) {
-        console.log('🔗 Credit card payment pair was deleted - refreshing all caches');
-      }
-
-      // Force revalidate all transaction caches to get real data from server
-      mutate(key);
-      mutate('/api/transactions');
-      // Also invalidate account-specific transaction caches
-      mutate((key) => typeof key === 'string' && key.startsWith('/api/transactions?accountId='));
-      mutate('/api/dashboard'); // Refresh dashboard too
-      
-      return deletionResult;
-    } catch (error) {
-      console.error('❌ Failed to delete transaction:', error);
-      // Revert optimistic update on error
-      mutate(key, currentData, false);
-      mutate('/api/transactions');
-      throw error;
-    }
-  };
-
-  // Toggle cleared status optimistically
-  const toggleClearedOptimistic = async (transactionId: string) => {
-    const currentData = data;
-    if (!currentData) return;
-
-    const transaction = currentData.transactions?.find((txn: any) => txn.id === transactionId);
-    if (!transaction) return;
-
-    console.log('🔄 Toggling cleared status optimistically:', transactionId, !transaction.cleared);
-
-    // Create optimistic update
-    const optimisticData = {
-      ...currentData,
-      transactions: currentData.transactions?.map((txn: any) => {
-        if (txn.id === transactionId) {
-          return { ...txn, cleared: !txn.cleared };
-        }
-        return txn;
-      })
-    };
-
-    // Update multiple cache keys to handle different views
-    mutate(key, optimisticData, false);
-    mutate('/api/transactions', (cachedData: any) => {
-      if (cachedData?.transactions) {
-        return {
-          ...cachedData,
-          transactions: cachedData.transactions.map((txn: any) => {
-            if (txn.id === transactionId) {
-              return { ...txn, cleared: !txn.cleared };
-            }
-            return txn;
-          })
-        };
-      }
-      return cachedData;
-    }, false);
-
-    try {
-      // Make API call
+      // Make the API call immediately (note: API uses query parameter)
       const response = await fetch(`/api/transactions?id=${transactionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          cleared: !transaction.cleared 
-        }),
+        body: JSON.stringify(updates)
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to toggle cleared status' }));
-        throw new Error(errorData.error || 'Failed to toggle cleared status');
+        throw new Error(`Update failed: ${response.statusText}`);
       }
 
-      console.log('✅ Cleared status toggled successfully:', transactionId);
+      const updatedTransaction = await response.json();
+      console.log('✅ Transaction updated successfully:', updatedTransaction);
 
-      // Force revalidate all transaction caches to get real data from server
+      // Refresh all related data immediately
       mutate(key);
       mutate('/api/transactions');
-      // Also invalidate account-specific transaction caches
-      mutate((key) => typeof key === 'string' && key.startsWith('/api/transactions?accountId='));
+      mutate('/api/dashboard'); // Update dashboard for budget changes
+      
+      return updatedTransaction;
     } catch (error) {
-      console.error('❌ Failed to toggle cleared status:', error);
-      // Revert optimistic update on error
-      mutate(key, currentData, false);
-      mutate('/api/transactions');
+      console.error('❌ Transaction update failed:', error);
       throw error;
     }
   };
 
-  // Special function for creating credit card payment transfers (updates both accounts)
-  const createCreditCardPaymentTransfer = async (checkingTransactionData: any, creditCardTransactionData: any, accounts?: any[]) => {
-    console.log('💳 Creating credit card payment transfer:', { checkingTransactionData, creditCardTransactionData });
+  // Simple transaction creation
+  const createTransactionOptimistic = async (transactionData: any) => {
+    console.log('📝 LOCAL: Creating transaction:', transactionData);
     
     try {
-      // Create both transactions optimistically at the same time
-      const [checkingResult, creditCardResult] = await Promise.all([
-        createTransactionOptimistic(checkingTransactionData, accounts),
-        createTransactionOptimistic(creditCardTransactionData, accounts)
-      ]);
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(transactionData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Create failed: ${response.statusText}`);
+      }
+
+      const newTransaction = await response.json();
+      console.log('✅ Transaction created successfully:', newTransaction);
+
+      // Refresh all related data immediately
+      mutate(key);
+      mutate('/api/transactions');
+      mutate('/api/dashboard');
       
-      console.log('✅ Credit card payment transfer completed successfully');
-      return { checkingResult, creditCardResult };
+      return newTransaction;
     } catch (error) {
-      console.error('❌ Failed to create credit card payment transfer:', error);
+      console.error('❌ Transaction creation failed:', error);
       throw error;
     }
+  };
+
+  // Simple transaction deletion
+  const deleteTransactionOptimistic = async (transactionId: string) => {
+    console.log('🗑️ LOCAL: Deleting transaction:', transactionId);
+    
+    try {
+      const response = await fetch(`/api/transactions?id=${transactionId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Delete failed: ${response.statusText}`);
+      }
+
+      console.log('✅ Transaction deleted successfully');
+
+      // Refresh all related data immediately
+      mutate(key);
+      mutate('/api/transactions');
+      mutate('/api/dashboard');
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Transaction deletion failed:', error);
+      throw error;
+    }
+  };
+
+  // Multiple transaction updates (for AI batch operations)
+  const updateMultipleTransactionsOptimistic = async (transactionUpdates: any[]) => {
+    console.log('📝 LOCAL: Updating multiple transactions:', transactionUpdates.length);
+    
+    try {
+      // Update each transaction sequentially for reliability
+      const results = [];
+      for (const update of transactionUpdates) {
+        const result = await updateTransactionOptimistic(update.id, update.updates);
+        results.push(result);
+      }
+      
+      console.log('✅ Multiple transactions updated successfully');
+      return results;
+    } catch (error) {
+      console.error('❌ Multiple transaction update failed:', error);
+      throw error;
+    }
+  };
+
+  // Stub for credit card payment transfer (if needed)
+  const createCreditCardPaymentTransfer = async (paymentData: any) => {
+    console.log('💳 LOCAL: Creating credit card payment transfer:', paymentData);
+    // Implementation would go here if needed
+    throw new Error('Credit card payment transfer not implemented in local version');
   };
 
   return {
@@ -443,11 +145,13 @@ export function useTransactions(accountId?: string) {
     error,
     isLoading,
     updateTransactionOptimistic,
-    updateMultipleTransactionsOptimistic,
+    updateMultipleTransactionsOptimistic, 
     createTransactionOptimistic,
-    createCreditCardPaymentTransfer,
     deleteTransactionOptimistic,
-    toggleClearedOptimistic,
-    refresh: () => mutate(key),
+    createCreditCardPaymentTransfer,
+    refresh: () => {
+      mutate(key);
+      mutate('/api/dashboard');
+    }
   };
 }

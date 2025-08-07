@@ -1,22 +1,30 @@
 import useSWR, { mutate } from 'swr';
+import { useWebSocket } from './useWebSocket';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export const useDashboard = () => {
   const { data, error, isLoading } = useSWR('/api/dashboard', fetcher, {
-    refreshInterval: 1000, // 1 second for local development testing
-    revalidateOnFocus: true,
+    // Reduce polling frequency since WebSocket handles real-time updates
+    refreshInterval: 30000, // 30 seconds instead of constant polling
+    revalidateOnFocus: false, // WebSocket handles focus-based updates
     revalidateOnReconnect: true,
   });
 
-  // Simple refresh function for local development
+  const { connected, requestSync, triggerUpdate } = useWebSocket();
+
+  // Simple refresh function that uses WebSocket when available
   const refresh = () => {
-    mutate('/api/dashboard');
+    if (connected) {
+      requestSync(); // Use WebSocket for instant updates
+    } else {
+      mutate('/api/dashboard'); // Fallback to SWR refresh
+    }
   };
 
-  // Optimistic budget update with immediate server refresh
+  // Optimistic budget update with WebSocket sync
   const updateBudgetOptimistic = async (budgetId: string, updates: any) => {
-    console.log('💰 Local: Optimistic budget update:', budgetId, updates);
+    console.log('💰 Optimistic budget update:', budgetId, updates);
     
     // Optimistic update to local cache
     mutate('/api/dashboard', (currentData: any) => {
@@ -32,25 +40,22 @@ export const useDashboard = () => {
       return { ...currentData, categories: updatedCategories };
     }, false);
     
-    // Immediate server refresh for local development
-    setTimeout(() => {
-      mutate('/api/dashboard');
-    }, 100);
+    // Trigger WebSocket sync for real-time updates to all clients
+    triggerUpdate('budget');
   };
 
-  // Transaction category update with immediate refresh
+  // Transaction category update with WebSocket sync
   const updateTransactionCategoriesOptimistic = async (transactionUpdates: any[]) => {
-    console.log('💳 Local: Transaction category updates:', transactionUpdates.length);
+    console.log('💳 Optimistic transaction category updates:', transactionUpdates.length);
     
-    // Immediate server refresh
-    setTimeout(() => {
-      mutate('/api/dashboard');
-    }, 100);
+    // Let the WebSocket handle the complex budget calculation updates
+    // This removes the race condition-prone setTimeout logic
+    triggerUpdate('transaction');
   };
 
-  // Create budget with immediate refresh
+  // Create budget with WebSocket sync
   const createBudgetOptimistic = async (budgetData: any) => {
-    console.log('📝 Local: Creating budget:', budgetData.name);
+    console.log('📝 Creating budget:', budgetData.name);
     
     // Create temporary optimistic entry
     mutate('/api/dashboard', (currentData: any) => {
@@ -75,15 +80,12 @@ export const useDashboard = () => {
       return { ...currentData, categories: updatedCategories };
     }, false);
     
-    // Immediate server refresh
-    setTimeout(() => {
-      mutate('/api/dashboard');
-    }, 100);
+    triggerUpdate('budget');
   };
 
-  // Delete budget with immediate refresh
+  // Delete budget with WebSocket sync
   const deleteBudgetOptimistic = async (budgetId: string) => {
-    console.log('🗑 Local: Deleting budget:', budgetId);
+    console.log('🗑 Deleting budget:', budgetId);
     
     // Optimistic removal
     mutate('/api/dashboard', (currentData: any) => {
@@ -97,17 +99,14 @@ export const useDashboard = () => {
       return { ...currentData, categories: updatedCategories };
     }, false);
     
-    // Immediate server refresh
-    setTimeout(() => {
-      mutate('/api/dashboard');
-    }, 100);
+    triggerUpdate('budget');
   };
 
   return {
     data,
     error,
     isLoading,
-    connected: true, // Always true for local development
+    connected,
     updateBudgetOptimistic,
     updateTransactionCategoriesOptimistic,
     createBudgetOptimistic,

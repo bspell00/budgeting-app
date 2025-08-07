@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../lib/auth';
+import { FinancialCalculator } from '../../lib/financial-calculator';
 import CreditCardAutomation from '../../lib/credit-card-automation';
 import prisma from '../../lib/prisma';
 
@@ -57,6 +58,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           year: currentYear,
         },
       });
+
+      // Ensure financial calculations are correct after budget creation
+      try {
+        await FinancialCalculator.ensureToBeAssignedBudget(userId);
+        console.log('✅ Financial sync completed after budget creation');
+      } catch (error) {
+        console.error('⚠️ Financial sync failed after budget creation:', error);
+      }
 
       res.status(201).json(budget);
     } catch (error) {
@@ -121,35 +130,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
-      // Update "To Be Assigned" budget when money is assigned to/from budgets
+      // Use financial calculator to ensure "To Be Assigned" stays correct
       if (amount !== undefined && amount !== null) {
         const amountDifference = parseFloat(amount) - existingBudget.amount;
         
         if (amountDifference !== 0) {
           console.log(`🔍 Budget update: ${existingBudget.name} from $${existingBudget.amount} to $${amount} (difference: ${amountDifference})`);
           
-          // Update "To Be Assigned" budget - decrease by the amount assigned to this budget
-          const currentMonth = new Date().getMonth() + 1;
-          const currentYear = new Date().getFullYear();
-          
-          const toBeAssignedBudget = await prisma.budget.findFirst({
-            where: {
-              userId: userId,
-              name: 'To Be Assigned',
-              month: currentMonth,
-              year: currentYear,
-            },
-          });
-          
-          if (toBeAssignedBudget) {
-            const newToBeAssignedAmount = toBeAssignedBudget.amount - amountDifference;
-            await prisma.budget.update({
-              where: { id: toBeAssignedBudget.id },
-              data: { amount: newToBeAssignedAmount },
-            });
-            console.log(`💰 Updated "To Be Assigned" from $${toBeAssignedBudget.amount} to $${newToBeAssignedAmount}`);
-          } else {
-            console.warn('⚠️  "To Be Assigned" budget not found - this should not happen');
+          // Let the financial calculator handle "To Be Assigned" recalculation
+          try {
+            await FinancialCalculator.ensureToBeAssignedBudget(userId);
+            console.log('✅ Financial sync completed after budget update');
+          } catch (error) {
+            console.error('⚠️ Financial sync failed after budget update:', error);
           }
         }
         
@@ -199,6 +192,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await prisma.budget.delete({
         where: { id },
       });
+
+      // Ensure financial calculations are correct after budget deletion
+      try {
+        await FinancialCalculator.ensureToBeAssignedBudget(userId);
+        console.log('✅ Financial sync completed after budget deletion');
+      } catch (error) {
+        console.error('⚠️ Financial sync failed after budget deletion:', error);
+      }
 
       res.json({ message: 'Budget deleted successfully' });
     } catch (error) {

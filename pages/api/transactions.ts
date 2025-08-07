@@ -223,6 +223,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: updateData
       });
 
+      // Trigger financial sync after update
+      if (FinancialCalculator && typeof FinancialCalculator.ensureToBeAssignedBudget === 'function') {
+        try {
+          await FinancialCalculator.ensureToBeAssignedBudget(userId);
+          console.log('✅ Financial sync completed after transaction update');
+        } catch (error) {
+          console.error('⚠️ Financial sync failed after transaction update:', error);
+        }
+      }
+
       res.json(updatedTransaction);
     } catch (error) {
       console.error('Error updating transaction:', error);
@@ -349,6 +359,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
 
       console.log(`✅ Deleted transaction ${id}${pairedTransaction ? ` and paired transaction ${pairedTransaction.id}` : ''}`);
+      
+      // Trigger financial sync after deletion
+      if (FinancialCalculator && typeof FinancialCalculator.ensureToBeAssignedBudget === 'function') {
+        try {
+          await FinancialCalculator.ensureToBeAssignedBudget(userId);
+          console.log('✅ Financial sync completed after transaction deletion');
+        } catch (error) {
+          console.error('⚠️ Financial sync failed after transaction deletion:', error);
+        }
+      }
+      
       res.json({ 
         success: true, 
         deletedTransactions: pairedTransaction ? 2 : 1,

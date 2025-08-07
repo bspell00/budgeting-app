@@ -92,10 +92,7 @@ const Dashboard = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   
-  // WebSocket connection for real-time updates
-  const { connected: wsConnected, requestSync } = useWebSocket();
-  
-  // SWR hooks for real-time data
+  // SWR hooks for real-time data with WebSocket integration
   const { 
     data: dashboardData, 
     error: dashboardError, 
