@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Delete all chat messages for this user
-    const result = await (prisma as any).chatMessage.deleteMany({
+    const result = await prisma.chatMessage.deleteMany({
       where: { userId }
     });
 

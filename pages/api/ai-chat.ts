@@ -56,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('✅ Processing AI chat message:', { userId, messageLength: message.length });
 
     // Store user message in database
-    const userMessage = await (prisma as any).chatMessage.create({
+    const userMessage = await prisma.chatMessage.create({
       data: {
         userId,
         type: 'user',
@@ -67,7 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('✅ User message stored in database:', userMessage.id);
 
     // Get recent conversation history from database (last 20 messages)
-    const dbHistory = await (prisma as any).chatMessage.findMany({
+    const dbHistory = await prisma.chatMessage.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 20
@@ -259,7 +259,7 @@ Just provide helpful financial advice based on the user's question.`
       executedFunctions: executedFunctions.length > 0 ? executedFunctions : undefined
     };
     
-    await (prisma as any).chatMessage.create({
+    await prisma.chatMessage.create({
       data: {
         userId: userId,
         type: 'ai',
