@@ -45,6 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       suggestions,
+      hasNewSuggestions: suggestions.length > 0,
+      lastUpdated: new Date().toISOString(),
       generatedAt: new Date().toISOString()
     });
 

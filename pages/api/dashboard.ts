@@ -68,6 +68,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     console.log('🔍 USER ACCOUNTS:', accounts.length);
 
+    // Ensure "To Be Assigned" budget exists for the current month
+    const existingToBeAssignedBudget = await prisma.budget.findFirst({
+      where: {
+        userId: userId,
+        name: 'To Be Assigned',
+        month: currentMonth,
+        year: currentYear,
+      },
+    });
+
+    if (!existingToBeAssignedBudget) {
+      console.log('📝 Creating missing "To Be Assigned" budget for current month');
+      await prisma.budget.create({
+        data: {
+          userId: userId,
+          name: 'To Be Assigned',
+          category: 'Income',
+          amount: 0,
+          spent: 0,
+          month: currentMonth,
+          year: currentYear,
+        }
+      });
+    }
+
     // Use the month/year filtered budgets for the final query
     const budgets = await prisma.budget.findMany({
       where: {
@@ -122,11 +147,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const totalDebtBalance = debtAccounts.reduce((sum, account) => sum + account.balance, 0);
     const totalBalance = totalCashBalance + totalDebtBalance; // For display purposes
     
-    // Calculate "To Be Assigned" - available cash minus what's been budgeted
-    const toBeAssigned = totalCashBalance - totalBudgeted;
+    // Get "To Be Assigned" amount from the budget (YNAB methodology)
+    const toBeAssignedBudget = budgets.find(budget => budget.name === 'To Be Assigned');
+    const toBeAssigned = toBeAssignedBudget ? toBeAssignedBudget.amount - toBeAssignedBudget.spent : 0;
 
     // Group budgets by category (Bills, Frequent, etc.)
     const budgetsByCategory = budgets.reduce((acc, budget) => {
+      // Skip "To Be Assigned" - it's handled separately
+      if (budget.name === 'To Be Assigned') {
+        return acc;
+      }
+      
       // Normalize credit card categories to consolidate them
       let categoryGroup = budget.category || 'Misc';
       
@@ -218,7 +249,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }));
 
     const dashboardData = {
-      toBeAssigned: totalCashBalance - totalBudgeted, // Only cash available for budgeting
+      toBeAssigned, // Use the "To Be Assigned" budget amount (YNAB methodology)
       totalBudgeted,
       totalSpent,
       totalBalance, // All accounts combined for net worth display

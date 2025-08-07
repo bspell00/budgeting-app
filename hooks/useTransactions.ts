@@ -26,6 +26,74 @@ export function useTransactions(accountId?: string) {
     isLoading: isLoading 
   });
 
+  // Bulk optimistic update for multiple transaction category changes (for AI categorization)
+  const updateMultipleTransactionsOptimistic = async (transactionIds: string[], updates: any) => {
+    const currentData = data;
+    if (!currentData || !transactionIds.length) return;
+
+    console.log('🔄 Updating multiple transactions optimistically:', transactionIds, updates);
+
+    // Create optimistic update for multiple transactions
+    const optimisticData = {
+      ...currentData,
+      transactions: currentData.transactions?.map((transaction: any) => {
+        if (transactionIds.includes(transaction.id)) {
+          return { ...transaction, ...updates };
+        }
+        return transaction;
+      })
+    };
+
+    // Update multiple cache keys to handle different views
+    mutate(key, optimisticData, false);
+    mutate('/api/transactions', (cachedData: any) => {
+      if (cachedData?.transactions) {
+        return {
+          ...cachedData,
+          transactions: cachedData.transactions.map((transaction: any) => {
+            if (transactionIds.includes(transaction.id)) {
+              return { ...transaction, ...updates };
+            }
+            return transaction;
+          })
+        };
+      }
+      return cachedData;
+    }, false);
+
+    // Update all account-specific caches
+    mutate((cacheKey) => {
+      return typeof cacheKey === 'string' && cacheKey.startsWith('/api/transactions?accountId=');
+    }, (cachedData: any) => {
+      if (cachedData?.transactions) {
+        return {
+          ...cachedData,
+          transactions: cachedData.transactions.map((transaction: any) => {
+            if (transactionIds.includes(transaction.id)) {
+              return { ...transaction, ...updates };
+            }
+            return transaction;
+          })
+        };
+      }
+      return cachedData;
+    }, false);
+
+    // Return immediately for optimistic UI update - no need to make API calls here
+    // as this is meant to be called after AI function execution
+    console.log('✅ Multiple transactions updated optimistically');
+    
+    // Refresh caches to get real data from server
+    setTimeout(() => {
+      mutate(key);
+      mutate('/api/transactions');
+      mutate((key) => typeof key === 'string' && key.startsWith('/api/transactions?accountId='));
+      if (updates.category) {
+        mutate('/api/dashboard');
+      }
+    }, 100);
+  };
+
   // Optimistic update for transaction category changes
   const updateTransactionOptimistic = async (transactionId: string, updates: any) => {
     const currentData = data;
@@ -375,6 +443,7 @@ export function useTransactions(accountId?: string) {
     error,
     isLoading,
     updateTransactionOptimistic,
+    updateMultipleTransactionsOptimistic,
     createTransactionOptimistic,
     createCreditCardPaymentTransfer,
     deleteTransactionOptimistic,

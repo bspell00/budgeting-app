@@ -80,6 +80,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log(`🚀 Creating default budgets for ${targetMonth}/${targetYear}`);
       
       const DEFAULT_BUDGET_CATEGORIES = [
+        // Income (for incoming funds)
+        { 
+          categoryGroup: 'Income', 
+          categories: ['To Be Assigned']
+        },
         // Credit Card Payments (always needed for automation)
         { 
           categoryGroup: 'Credit Card Payments', 

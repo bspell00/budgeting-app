@@ -52,7 +52,7 @@ import AccountClosureModal from './AccountClosureModal';
 import AIAdvisorDashboard from './AIAdvisorDashboard';
 import TransactionAlertBanner from './TransactionAlertBanner';
 import AIChat from './AIChat';
-import FinleySuggests from './FinleySuggests';
+// import FinleySuggests from './FinleySuggests'; // Moved to Finley chat interface
 
 const Dashboard = () => {
   const { data: session } = useSession();
@@ -97,6 +97,7 @@ const Dashboard = () => {
     error: dashboardError, 
     isLoading: dashboardLoading,
     updateBudgetOptimistic,
+    updateTransactionCategoriesOptimistic,
     createBudgetOptimistic,
     deleteBudgetOptimistic,
     refresh: refreshDashboard
@@ -107,6 +108,7 @@ const Dashboard = () => {
     error: transactionsError,
     isLoading: transactionsLoading,
     updateTransactionOptimistic,
+    updateMultipleTransactionsOptimistic,
     createTransactionOptimistic,
     createCreditCardPaymentTransfer,
     deleteTransactionOptimistic,
@@ -392,6 +394,50 @@ const Dashboard = () => {
       fetchDashboardData();
     }
   }, [session]);
+
+  // Listen for Finley transaction categorization events
+  useEffect(() => {
+    const handleFinleyTransactionUpdate = (event: any) => {
+      console.log('🎯 Received Finley transaction update event:', event.detail);
+      const { transactionIds, transactionDetails, updates, budgetId } = event.detail;
+      
+      console.log('📊 Event details breakdown:', {
+        transactionIdsCount: transactionIds?.length || 0,
+        transactionDetailsCount: transactionDetails?.length || 0,
+        updates,
+        budgetId,
+        hasTransactionUpdateFunction: !!updateMultipleTransactionsOptimistic,
+        hasBudgetUpdateFunction: !!updateTransactionCategoriesOptimistic
+      });
+      
+      // Update transactions optimistically
+      if (updateMultipleTransactionsOptimistic && transactionIds && transactionIds.length > 0 && updates) {
+        console.log('🔄 Triggering optimistic transaction updates:', { transactionIds, updates, budgetId });
+        updateMultipleTransactionsOptimistic(transactionIds, updates).catch(console.error);
+      }
+      
+      // Update budget spending optimistically
+      if (updateTransactionCategoriesOptimistic && transactionDetails && transactionDetails.length > 0) {
+        console.log('💰 About to trigger optimistic budget updates with details:', transactionDetails);
+        updateTransactionCategoriesOptimistic(transactionDetails).catch(error => {
+          console.error('❌ Budget update error:', error);
+        });
+      } else {
+        console.log('❌ Budget update skipped because:', {
+          hasUpdateFunction: !!updateTransactionCategoriesOptimistic,
+          hasTransactionDetails: !!transactionDetails,
+          transactionDetailsLength: transactionDetails?.length || 0
+        });
+      }
+    };
+
+    console.log('👂 Setting up Finley transaction update event listener');
+    window.addEventListener('finley-transaction-update', handleFinleyTransactionUpdate);
+    return () => {
+      console.log('🧹 Cleaning up Finley transaction update event listener');
+      window.removeEventListener('finley-transaction-update', handleFinleyTransactionUpdate);
+    };
+  }, [updateMultipleTransactionsOptimistic, updateTransactionCategoriesOptimistic]);
 
   const fetchAccountTransactions = async (accountId: string) => {
     try {
@@ -2452,11 +2498,7 @@ const Dashboard = () => {
           {/* Right Sidebar */}
           <aside className="w-full lg:w-72 xl:w-80 lg:flex-shrink-0 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 p-4 lg:p-4 xl:p-6 order-first lg:order-last">
             <div className="space-y-6 sticky top-4">
-              {/* Finley Suggests */}
-              <FinleySuggests 
-                userId={session?.user?.email || ''}
-                onRefreshData={hotReload}
-              />
+              {/* Finley Suggests moved to AI Chat - keeping space for future sidebar content */}
               
               {/* Budget Goals - Contextual based on selection */}
               <div>

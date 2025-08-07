@@ -17,6 +17,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { mutate } from 'swr';
 
 interface ChatMessage {
   id: string;
@@ -191,6 +192,69 @@ I'm your **ChatGPT-style financial assistant** with access to your complete fina
       }
 
       const data = await response.json();
+      
+      console.log('🎯 ChatGPT-style AI response received:', data);
+      
+      // Handle executed functions for optimistic updates (same logic as useAIChat)
+      if (data.executedFunctions && data.executedFunctions.length > 0) {
+        console.log('🔄 Processing executed functions for ChatGPT-style optimistic updates:', data.executedFunctions);
+        
+        for (const func of data.executedFunctions) {
+          if (func.success) {
+            // Trigger appropriate data refreshes based on function type
+            if (func.name === 'categorize_transaction') {
+              console.log('💳 Refreshing transaction data after categorization', func.result);
+              
+              // Trigger optimistic updates if we have transaction details
+              if (func.result?.transactions && func.args?.category) {
+                const transactionIds = func.result.transactions.map((t: any) => t.id);
+                console.log('🔄 Triggering optimistic transaction updates for:', transactionIds, 'category:', func.args.category);
+                console.log('📊 Transaction details from AI function:', func.result.transactions);
+                
+                // Use the transaction details directly from the API response
+                const transactionDetails = func.result.transactions.map((t: any) => ({
+                  id: t.id,
+                  amount: t.amount,
+                  description: t.description,
+                  oldCategory: t.oldCategory || 'Needs a Category',
+                  newCategory: t.newCategory || func.args.category
+                }));
+                
+                console.log('💰 Transaction details prepared for budget updates:', transactionDetails);
+                
+                // Dispatch the same custom event that other components listen for
+                window.dispatchEvent(new CustomEvent('finley-transaction-update', {
+                  detail: {
+                    transactionIds,
+                    transactionDetails,
+                    updates: { category: func.args.category },
+                    budgetId: func.args.budget_id
+                  }
+                }));
+              }
+              
+              mutate('/api/transactions');
+              mutate('/api/dashboard'); // Dashboard might show transaction data
+            } else if (func.name === 'update_budget_amount') {
+              console.log('💰 Refreshing budget data after budget update');
+              mutate('/api/dashboard');
+              mutate('/api/budgets');
+            } else if (func.name === 'transfer_money_between_budgets') {
+              console.log('🔄 Refreshing data after budget transfer');
+              mutate('/api/dashboard');
+              mutate('/api/budgets');
+            } else if (func.name === 'create_financial_goal') {
+              console.log('🎯 Refreshing goals data after goal creation');
+              mutate('/api/dashboard');
+              mutate('/api/goals');
+            } else if (func.name === 'add_budget_category') {
+              console.log('📊 Refreshing budget data after category creation');
+              mutate('/api/dashboard');
+              mutate('/api/budgets');
+            }
+          }
+        }
+      }
       
       // Simulate streaming effect by typing out the response
       const fullResponse = data.message || "I'm here to help with your finances!";

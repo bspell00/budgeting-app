@@ -48,6 +48,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { message, history = [] }: ChatRequest = req.body;
 
+    // Store user message in database
+    const userMessage = await prisma.chatMessage.create({
+      data: {
+        userId,
+        type: 'user',
+        content: message
+      }
+    });
+
+    // Get recent conversation history from database (last 20 messages)
+    const dbHistory = await prisma.chatMessage.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20
+    });
+
+    // Reverse to get chronological order (oldest first)
+    const conversationHistory = dbHistory.reverse().map(msg => ({
+      role: msg.type === 'user' ? 'user' : 'assistant',
+      content: msg.content
+    }));
+
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
     }
@@ -152,10 +174,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const netWorth = totalCash - totalDebt;
     
     // === INCOME ANALYSIS ===
-    const incomeTransactions = yearTransactions.filter(t => t.amount > 0 && !['Transfer', 'Credit Card Payment', 'Payment', 'Deposit'].includes(t.category));
+    const incomeTransactions = yearTransactions.filter(t => t.amount > 0 && (t.category === 'To Be Assigned' || !['Transfer', 'Credit Card Payment', 'Payment', 'Deposit'].includes(t.category)));
     const totalYearIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
     const averageMonthlyIncome = totalYearIncome / 12;
-    const currentMonthIncome = currentTransactions.filter(t => t.amount > 0 && !['Transfer', 'Credit Card Payment'].includes(t.category)).reduce((sum, t) => sum + t.amount, 0);
+    const currentMonthIncome = currentTransactions.filter(t => t.amount > 0 && (t.category === 'To Be Assigned' || !['Transfer', 'Credit Card Payment'].includes(t.category))).reduce((sum, t) => sum + t.amount, 0);
     
     // === EXPENSE ANALYSIS ===
     const expenseTransactions = yearTransactions.filter(t => t.amount < 0);
@@ -267,7 +289,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     );
 
     // Generate comprehensive AI response
-    const aiResponse = await generateOpenAIResponse(message, {
+    const aiResponse = await generateOpenAIResponse(message, userId, conversationHistory, {
       // Raw Data
       budgets,
       lastMonthBudgets,
@@ -323,7 +345,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       trendData,
       
       // Context
-      history,
       currentDate: new Date().toISOString()
     });
 
@@ -352,7 +373,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-async function generateOpenAIResponse(message: string, context: any) {
+async function generateOpenAIResponse(message: string, userId: string, conversationHistory: any[], context: any) {
   const { 
     budgets, 
     accounts, 
@@ -480,11 +501,7 @@ ${overspentBudgets.map((b: any) =>
 ).join('\n')}
 `;
 
-  // Create conversation history
-  const conversationHistory = history.slice(-6).map((msg: any) => ({
-    role: msg.type === 'user' ? 'user' : 'assistant',
-    content: msg.content
-  }));
+  // Use conversationHistory passed as parameter
 
   try {
     const completion = await openai.chat.completions.create({
@@ -492,54 +509,43 @@ ${overspentBudgets.map((b: any) =>
       messages: [
         {
           role: "system",
-          content: `You are an expert financial advisor with complete access to the user's financial data. You can answer ANY question about their finances with specific, detailed analysis using their actual data.
+          content: `You are Finley, an expert financial advisor AI with complete access to the user's financial data AND the ability to take actions on their behalf.
 
-CAPABILITIES:
-- Analyze spending patterns and trends
-- Calculate financial ratios and health metrics  
-- Provide budget recommendations
-- Forecast cash flow and savings
-- Compare periods and track progress
-- Identify opportunities and risks
-- Answer specific financial questions with exact data
-- Generate comprehensive debt payoff strategies
+🎯 YOUR SUPERPOWERS:
+- Analyze financial data with precision
+- Take REAL actions: update budgets, categorize transactions, create goals
+- Provide specific recommendations using actual numbers
+- Execute financial plans immediately
 
-DEBT PAYOFF EXPERTISE:
-When users ask about debt, credit cards, loans, or paying off balances, ALWAYS create detailed debt payoff plans.
+💪 AVAILABLE ACTIONS (use functions):
+1. update_budget_amount - Adjust budget allocations
+2. transfer_money_between_budgets - Move money between categories
+3. categorize_transaction - Fix uncategorized transactions
+4. create_financial_goal - Set up savings/debt goals
+5. add_budget_category - Create new budget line items
+6. search_transactions - Find transactions by meaning (coffee, dining, etc.)
 
-DEBT PAYOFF PLAN REQUIREMENTS:
-- Use explicit terms like "debt payoff plan", "debt strategy", or "debt elimination"
-- Include specific monthly payment amounts from their actual budget
-- Provide clear timeline (e.g., "12 months", "18 months")
-- Use numbered steps or bullet points for action items
-- Specify strategy type (debt avalanche, debt snowball, or custom)
-- Include actual dollar amounts from their debt balances
-- Give concrete next steps they can take immediately
+🧠 WHEN TO USE FUNCTIONS:
+- User says "move $X from A to B" → transfer_money_between_budgets
+- "Increase my grocery budget" → update_budget_amount  
+- "Categorize that Starbucks transaction" → categorize_transaction
+- "Set a goal to save $X" → create_financial_goal
+- "Add a budget for vacation" → add_budget_category
+- "Show me coffee purchases" or "Find dining expenses" → search_transactions
 
-IMPORTANT: Structure all debt responses as actionable debt payoff plans with clear steps, timelines, and payment amounts.
+💬 CONVERSATION STYLE:
+- Be conversational and helpful
+- Confirm actions before executing: "I'll move $200 from Entertainment to Groceries - sound good?"
+- Use their actual data and numbers
+- Provide context for why actions make sense
 
-DEBT PAYOFF PLAN FORMAT:
-When generating debt payoff plans, structure them as:
-1. Current Debt Summary (balances, interest rates, minimums)
-2. Recommended Strategy (with rationale)
-3. Monthly Payment Plan (specific amounts and timing)
-4. Timeline & Milestones (month-by-month progress)
-5. Interest Savings Projection
-6. Budget Adjustments Required
-7. Action Steps to Start Immediately
-
-RESPONSE STYLE:
-- Use specific dollar amounts and percentages from their data
-- Reference actual account names, budget categories, and transactions
-- Be conversational but thorough
-- Provide actionable insights and recommendations
-- Use the user's actual financial data to support all statements
-- When creating debt plans, be specific about amounts, dates, and steps
+🎯 DEBT EXPERTISE:
+Still create detailed debt payoff plans with specific steps, timelines, and payment amounts.
 
 USER'S COMPLETE FINANCIAL DATA:
 ${financialDataContext}
 
-Instructions: Answer the user's question using their specific financial data. Be direct, helpful, and provide concrete insights based on their actual numbers. Don't give generic advice - use their real data to provide personalized analysis.`
+Instructions: Use functions to take actions when users request changes. Always explain what you're doing and why it helps their financial situation.`
         },
         ...conversationHistory,
         {
@@ -548,10 +554,235 @@ Instructions: Answer the user's question using their specific financial data. Be
         }
       ],
       max_tokens: 1000,
-      temperature: 0.3, // Lower temperature for more focused responses
+      temperature: 0.3,
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "update_budget_amount",
+            description: "Update the amount allocated to a specific budget category",
+            parameters: {
+              type: "object",
+              properties: {
+                budget_id: {
+                  type: "string",
+                  description: "The ID of the budget to update"
+                },
+                new_amount: {
+                  type: "number",
+                  description: "The new budget amount"
+                },
+                reason: {
+                  type: "string",
+                  description: "Explanation for the budget change"
+                }
+              },
+              required: ["budget_id", "new_amount", "reason"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "transfer_money_between_budgets",
+            description: "Move money from one budget category to another",
+            parameters: {
+              type: "object",
+              properties: {
+                from_budget_id: {
+                  type: "string",
+                  description: "The ID of the budget to take money from"
+                },
+                to_budget_id: {
+                  type: "string",
+                  description: "The ID of the budget to add money to"
+                },
+                amount: {
+                  type: "number",
+                  description: "The amount to transfer"
+                },
+                reason: {
+                  type: "string",
+                  description: "Explanation for the transfer"
+                }
+              },
+              required: ["from_budget_id", "to_budget_id", "amount", "reason"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "categorize_transaction",
+            description: "Update the category of one or more transactions. Can identify transactions by ID or by description pattern.",
+            parameters: {
+              type: "object",
+              properties: {
+                transaction_id: {
+                  type: "string",
+                  description: "The ID of a specific transaction to categorize (optional if using description_pattern)"
+                },
+                description_pattern: {
+                  type: "string",
+                  description: "A pattern to match transaction descriptions (e.g., 'Uber', 'Starbucks') - will categorize all matching transactions"
+                },
+                category: {
+                  type: "string",
+                  description: "The new category for the transaction(s)"
+                },
+                budget_id: {
+                  type: "string",
+                  description: "The budget ID to assign this transaction to (optional)"
+                }
+              },
+              required: ["category"],
+              additionalProperties: false
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "create_financial_goal",
+            description: "Create a new savings or debt payoff goal",
+            parameters: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description: "The name of the goal"
+                },
+                target_amount: {
+                  type: "number",
+                  description: "The target amount to reach"
+                },
+                current_amount: {
+                  type: "number",
+                  description: "The current progress amount (default 0)"
+                },
+                target_date: {
+                  type: "string",
+                  description: "Target completion date (YYYY-MM-DD format)"
+                },
+                goal_type: {
+                  type: "string",
+                  enum: ["savings", "debt_payoff", "emergency_fund", "investment"],
+                  description: "The type of goal"
+                }
+              },
+              required: ["name", "target_amount", "goal_type"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "add_budget_category",
+            description: "Create a new budget category/line item",
+            parameters: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description: "The name of the budget category"
+                },
+                category_group: {
+                  type: "string",
+                  description: "Which group to add it to (e.g., 'Frequent Spending', 'Just for Fun')"
+                },
+                amount: {
+                  type: "number",
+                  description: "Initial budget amount"
+                },
+                description: {
+                  type: "string",
+                  description: "Description of what this budget is for"
+                }
+              },
+              required: ["name", "category_group", "amount"]
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "search_transactions",
+            description: "Search transactions using semantic similarity (understands meaning, not just keywords)",
+            parameters: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "Search query (e.g., 'coffee purchases', 'dining out', 'gas stations')"
+                },
+                limit: {
+                  type: "number",
+                  description: "Maximum number of results to return (default 10)"
+                },
+                threshold: {
+                  type: "number",
+                  description: "Similarity threshold 0-1 (default 0.7, higher = more strict)"
+                }
+              },
+              required: ["query"]
+            }
+          }
+        }
+      ],
+      tool_choice: "auto"
     });
 
-    const aiMessage = completion.choices[0]?.message?.content || "I'm here to help analyze your financial data!";
+    const responseMessage = completion.choices[0]?.message;
+    let aiMessage = responseMessage?.content || "I'm here to help analyze your financial data!";
+    
+    // Handle function calls
+    const executedFunctions: any[] = [];
+    if (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
+      console.log('🔧 AI wants to execute functions:', responseMessage.tool_calls.length);
+      
+      const functionResults = [];
+      
+      for (const toolCall of responseMessage.tool_calls) {
+        const functionName = toolCall.function.name;
+        const functionArgs = JSON.parse(toolCall.function.arguments);
+        
+        console.log(`🎯 Executing function: ${functionName}`, functionArgs);
+        
+        try {
+          const result = await executeFunction(userId, functionName, functionArgs);
+          functionResults.push(`✅ ${functionName}: ${result.message}`);
+          
+          // Store execution details for client-side optimistic updates
+          executedFunctions.push({
+            name: functionName,
+            args: functionArgs,
+            result: result,
+            success: true
+          });
+          
+          // Refresh relevant data after function execution
+          await refreshDataAfterFunction(functionName, result);
+          
+        } catch (error) {
+          console.error(`❌ Function ${functionName} failed:`, error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          functionResults.push(`❌ ${functionName}: ${errorMessage}`);
+          
+          // Store failed execution for client awareness
+          executedFunctions.push({
+            name: functionName,
+            args: functionArgs,
+            error: errorMessage,
+            success: false
+          });
+        }
+      }
+      
+      // Add function results to the AI message
+      if (functionResults.length > 0) {
+        aiMessage += "\n\n**Actions Completed:**\n" + functionResults.join('\n');
+      }
+    }
     
     // Smart plan detection - check if AI created a plan that could be added to debt payoff page
     const containsPlan = detectPlanInResponse(aiMessage);
@@ -613,9 +844,25 @@ Instructions: Answer the user's question using their specific financial data. Be
       actions: actions.map(a => a.label)
     });
 
+    // Store AI response in database
+    const metadata = {
+      actions,
+      executedFunctions: executedFunctions.length > 0 ? executedFunctions : undefined
+    };
+    
+    await prisma.chatMessage.create({
+      data: {
+        userId: userId,
+        type: 'ai',
+        content: aiMessage,
+        metadata: (actions.length > 0 || executedFunctions.length > 0) ? JSON.stringify(metadata) : null
+      }
+    });
+
     return {
       message: aiMessage,
-      actions
+      actions,
+      executedFunctions: executedFunctions.length > 0 ? executedFunctions : undefined
     };
 
   } catch (error) {
@@ -729,6 +976,317 @@ function detectPlanInResponse(message: string): boolean {
   return (hasPlanTerms && hasStructure) || 
          (hasNumberedList && isDebtRelated) ||
          (isDebtRelated && hasActionableAdvice && message.length > 200); // Substantial debt advice
+}
+
+// Function execution handler
+async function executeFunction(userId: string, functionName: string, args: any) {
+  console.log(`🔧 Executing ${functionName} for user ${userId}:`, args);
+  
+  switch (functionName) {
+    case 'update_budget_amount':
+      return await updateBudgetAmount(userId, args);
+      
+    case 'transfer_money_between_budgets':
+      return await transferMoneyBetweenBudgets(userId, args);
+      
+    case 'categorize_transaction':
+      return await categorizeTransaction(userId, args);
+      
+    case 'create_financial_goal':
+      return await createFinancialGoal(userId, args);
+      
+    case 'add_budget_category':
+      return await addBudgetCategory(userId, args);
+      
+    case 'search_transactions':
+      return await searchTransactions(userId, args);
+      
+    default:
+      throw new Error(`Unknown function: ${functionName}`);
+  }
+}
+
+// Individual function implementations
+async function updateBudgetAmount(userId: string, args: { budget_id: string, new_amount: number, reason: string }) {
+  const { budget_id, new_amount, reason } = args;
+  
+  const budget = await prisma.budget.findFirst({
+    where: { id: budget_id, userId }
+  });
+  
+  if (!budget) {
+    throw new Error(`Budget not found: ${budget_id}`);
+  }
+  
+  await prisma.budget.update({
+    where: { id: budget_id },
+    data: { amount: new_amount }
+  });
+  
+  return {
+    success: true,
+    message: `Updated ${budget.name} budget from $${budget.amount} to $${new_amount}. Reason: ${reason}`
+  };
+}
+
+async function transferMoneyBetweenBudgets(userId: string, args: { from_budget_id: string, to_budget_id: string, amount: number, reason: string }) {
+  const { from_budget_id, to_budget_id, amount, reason } = args;
+  
+  const [fromBudget, toBudget] = await Promise.all([
+    prisma.budget.findFirst({ where: { id: from_budget_id, userId } }),
+    prisma.budget.findFirst({ where: { id: to_budget_id, userId } })
+  ]);
+  
+  if (!fromBudget || !toBudget) {
+    throw new Error('One or both budgets not found');
+  }
+  
+  if (fromBudget.amount < amount) {
+    throw new Error(`Insufficient funds in ${fromBudget.name} ($${fromBudget.amount} available)`);
+  }
+  
+  await Promise.all([
+    prisma.budget.update({
+      where: { id: from_budget_id },
+      data: { amount: fromBudget.amount - amount }
+    }),
+    prisma.budget.update({
+      where: { id: to_budget_id },
+      data: { amount: toBudget.amount + amount }
+    })
+  ]);
+  
+  // Log the transfer for audit trail
+  await prisma.budgetTransfer.create({
+    data: {
+      userId,
+      fromBudgetId: from_budget_id,
+      toBudgetId: to_budget_id,
+      amount,
+      reason: reason
+    }
+  });
+  
+  return {
+    success: true,
+    message: `Transferred $${amount} from ${fromBudget.name} to ${toBudget.name}. Reason: ${reason}`
+  };
+}
+
+async function categorizeTransaction(userId: string, args: { transaction_id?: string, description_pattern?: string, category: string, budget_id?: string }) {
+  const { transaction_id, description_pattern, category, budget_id } = args;
+  
+  if (!transaction_id && !description_pattern) {
+    throw new Error('Either transaction_id or description_pattern must be provided');
+  }
+  
+  let transactions: any[] = [];
+  
+  if (transaction_id) {
+    // Single transaction by ID
+    const transaction = await prisma.transaction.findFirst({
+      where: { id: transaction_id, userId }
+    });
+    
+    if (!transaction) {
+      throw new Error(`Transaction not found: ${transaction_id}`);
+    }
+    
+    transactions = [transaction];
+  } else if (description_pattern) {
+    // Multiple transactions by description pattern
+    transactions = await prisma.transaction.findMany({
+      where: {
+        userId,
+        description: {
+          contains: description_pattern,
+          mode: 'insensitive'
+        }
+      }
+    });
+    
+    if (transactions.length === 0) {
+      throw new Error(`No transactions found matching pattern: ${description_pattern}`);
+    }
+  }
+  
+  // Find budget if budget_id provided
+  let budget = null;
+  if (budget_id) {
+    budget = await prisma.budget.findFirst({
+      where: { id: budget_id, userId }
+    });
+  }
+  
+  // Update all matching transactions
+  const updateData: any = { category };
+  if (budget) {
+    updateData.budgetId = budget_id;
+  }
+  
+  const transactionIds = transactions.map(t => t.id);
+  await prisma.transaction.updateMany({
+    where: { id: { in: transactionIds } },
+    data: updateData
+  });
+  
+  // Return success message
+  const transactionDescriptions = transactions.map(t => t.description).join(', ');
+  const count = transactions.length;
+  
+  return {
+    success: true,
+    message: `Categorized ${count} transaction${count > 1 ? 's' : ''} as "${category}": ${transactionDescriptions.length > 100 ? transactionDescriptions.substring(0, 100) + '...' : transactionDescriptions}${budget_id ? ' and assigned to budget' : ''}`,
+    count: count,
+    transactions: transactions.map(t => ({ 
+      id: t.id, 
+      description: t.description, 
+      amount: t.amount,
+      oldCategory: t.category || 'Needs a Category',
+      newCategory: category
+    }))
+  };
+}
+
+async function createFinancialGoal(userId: string, args: { name: string, target_amount: number, current_amount?: number, target_date?: string, goal_type: string }) {
+  const { name, target_amount, current_amount = 0, target_date, goal_type } = args;
+  
+  const goalData: any = {
+    userId,
+    name,
+    targetAmount: target_amount,
+    currentAmount: current_amount,
+    type: goal_type
+  };
+  
+  if (target_date) {
+    goalData.targetDate = new Date(target_date);
+  }
+  
+  const goal = await prisma.goal.create({
+    data: goalData
+  });
+  
+  return {
+    success: true,
+    message: `Created ${goal_type} goal "${name}" with target of $${target_amount}${target_date ? ` by ${target_date}` : ''}`
+  };
+}
+
+async function addBudgetCategory(userId: string, args: { name: string, category_group: string, amount: number, description?: string }) {
+  const { name, category_group, amount, description } = args;
+  
+  // Get current month/year
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  
+  const budget = await prisma.budget.create({
+    data: {
+      userId,
+      name,
+      category: category_group,
+      amount,
+      spent: 0,
+      month,
+      year
+    }
+  });
+  
+  return {
+    success: true,
+    message: `Created new budget category "${name}" in ${category_group} with $${amount} allocated`
+  };
+}
+
+async function searchTransactions(userId: string, args: { query: string, limit?: number, threshold?: number }) {
+  const { query, limit = 10, threshold = 0.7 } = args;
+  
+  try {
+    // Call our search API internally
+    const searchUrl = new URL('/api/transactions/search', 'http://localhost:3000');
+    searchUrl.searchParams.set('q', query);
+    searchUrl.searchParams.set('limit', limit.toString());
+    searchUrl.searchParams.set('threshold', threshold.toString());
+    
+    // For internal API calls, we need to simulate the request with proper auth
+    // In a real implementation, you'd pass the auth context properly
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        userId,
+        description: {
+          contains: query,
+          mode: 'insensitive'
+        }
+      },
+      include: {
+        account: {
+          select: { accountName: true }
+        },
+        budget: {
+          select: { name: true }
+        }
+      },
+      orderBy: { date: 'desc' },
+      take: limit
+    });
+    
+    const totalAmount = transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    const avgAmount = transactions.length > 0 ? totalAmount / transactions.length : 0;
+    
+    // Create detailed transaction list for AI categorization
+    const transactionDetails = transactions.slice(0, 5).map((t, index) => 
+      `${index + 1}. "${t.description}" - $${Math.abs(t.amount)} on ${new Date(t.date).toLocaleDateString()} (ID: ${t.id})`
+    ).join('\n');
+    
+    const summary = `Found ${transactions.length} transactions matching "${query}":
+• Total spent: $${totalAmount.toFixed(2)}
+• Average amount: $${avgAmount.toFixed(2)}
+• Date range: ${transactions.length > 0 ? 
+  `${new Date(transactions[transactions.length - 1].date).toLocaleDateString()} to ${new Date(transactions[0].date).toLocaleDateString()}` 
+  : 'N/A'}
+
+Transaction details:
+${transactionDetails}
+
+To categorize these transactions, use the categorize_transaction function with either:
+- description_pattern: "${query}" (to categorize all matching transactions)
+- transaction_id: specific ID (to categorize individual transactions)`;
+
+    return {
+      success: true,
+      message: summary,
+      data: {
+        transactions: transactions.slice(0, 5), // Show top 5 in response
+        total: transactions.length,
+        totalAmount,
+        avgAmount,
+        query
+      }
+    };
+    
+  } catch (error) {
+    console.error('Transaction search failed:', error);
+    return {
+      success: false,
+      message: `Search failed for "${query}". Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+}
+
+// Data refresh helper
+async function refreshDataAfterFunction(functionName: string, result?: any) {
+  console.log(`📊 Data refreshed after ${functionName}`);
+  
+  // For transaction categorization, we need to notify that the data has changed
+  // This will be handled by the client-side optimistic updates
+  if (functionName === 'categorize_transaction') {
+    console.log('🔄 Transaction categorization completed, client should refresh transaction data');
+    // The result contains transaction details that can be used for optimistic updates
+    if (result?.transactions) {
+      console.log(`📝 Categorized ${result.count} transactions:`, result.transactions.map((t: any) => t.description));
+    }
+  }
 }
 
 // All predetermined response functions removed - AI now handles everything conversationally with comprehensive financial data analysis

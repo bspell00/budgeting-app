@@ -240,11 +240,95 @@ export function useDashboard() {
     }
   };
 
+  // Optimistic update for transaction categorization affecting budgets
+  const updateTransactionCategoriesOptimistic = async (transactionUpdates: Array<{id: string, amount: number, oldCategory?: string, newCategory: string}>) => {
+    const currentData = data;
+    if (!currentData) {
+      console.log('❌ No dashboard data available for budget updates');
+      return;
+    }
+
+    console.log('💰 Updating budget spending optimistically after transaction categorization:', transactionUpdates);
+    console.log('📊 Current dashboard data structure:', {
+      categoriesCount: currentData.categories?.length,
+      categories: currentData.categories?.map((c: any) => ({ name: c.name, budgetsCount: c.budgets?.length }))
+    });
+
+    // Calculate budget changes from transaction updates
+    const budgetChanges: Record<string, number> = {};
+    
+    transactionUpdates.forEach(update => {
+      console.log(`🔍 Processing transaction: ${update.id}, amount: ${update.amount}, ${update.oldCategory} -> ${update.newCategory}`);
+      
+      // Remove spending from old category budget (if it exists)
+      if (update.oldCategory && update.oldCategory !== 'Needs a Category' && update.amount < 0) {
+        const oldBudgetKey = update.oldCategory;
+        const changeAmount = Math.abs(update.amount);
+        budgetChanges[oldBudgetKey] = (budgetChanges[oldBudgetKey] || 0) + changeAmount; // Reduce spending (add back)
+        console.log(`📉 Reducing spending in "${oldBudgetKey}" by $${changeAmount}`);
+      }
+      
+      // Add spending to new category budget (for expenses only)
+      if (update.newCategory && update.newCategory !== 'Needs a Category' && update.amount < 0) {
+        const newBudgetKey = update.newCategory;
+        const changeAmount = Math.abs(update.amount);
+        budgetChanges[newBudgetKey] = (budgetChanges[newBudgetKey] || 0) - changeAmount; // Increase spending (subtract)
+        console.log(`📈 Increasing spending in "${newBudgetKey}" by $${changeAmount}`);
+      }
+      
+      // Log if transaction is income (positive amount)
+      if (update.amount > 0) {
+        console.log(`💰 Skipping income transaction: ${update.id} ($${update.amount})`);
+      }
+    });
+
+    console.log('📊 Budget changes calculated:', budgetChanges);
+
+    // Create optimistic update
+    const optimisticData = {
+      ...currentData,
+      categories: currentData.categories?.map((category: any) => ({
+        ...category,
+        budgets: category.budgets?.map((budget: any) => {
+          const budgetChange = budgetChanges[budget.name];
+          console.log(`🔍 Checking budget "${budget.name}" for changes:`, { budgetChange, hasChange: budgetChange !== undefined && budgetChange !== 0 });
+          
+          if (budgetChange !== undefined && budgetChange !== 0) {
+            const oldSpent = budget.spent || 0;
+            const newSpent = Math.max(0, oldSpent + budgetChange);
+            const newAvailable = (budget.budgeted || 0) - newSpent;
+            
+            console.log(`🔄 Updating budget "${budget.name}": spent ${oldSpent} -> ${newSpent} (change: ${budgetChange}), available: ${newAvailable}`);
+            
+            return {
+              ...budget,
+              spent: newSpent,
+              available: newAvailable,
+              status: newAvailable < 0 ? 'overspent' : 'on-track'
+            };
+          }
+          return budget;
+        })
+      }))
+    };
+
+    // Update cache optimistically
+    mutate('/api/dashboard', optimisticData, false);
+    
+    console.log('✅ Budget spending updated optimistically');
+
+    // Refresh from server after a short delay to get accurate data
+    setTimeout(() => {
+      mutate('/api/dashboard');
+    }, 500);
+  };
+
   return {
     data,
     error,
     isLoading,
     updateBudgetOptimistic,
+    updateTransactionCategoriesOptimistic,
     createBudgetOptimistic,
     deleteBudgetOptimistic,
     refresh: () => mutate('/api/dashboard'),

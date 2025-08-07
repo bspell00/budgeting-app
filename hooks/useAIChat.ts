@@ -3,22 +3,18 @@ import useSWR, { mutate } from 'swr';
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export function useAIChat() {
-  // Use local state instead of trying to fetch non-existent history endpoint
-  const { data, error, isLoading } = useSWR('/api/ai-chat/session', () => {
-    // Return default empty chat session
-    return {
-      messages: []
-    };
-  }, {
+  // Fetch real conversation history from database
+  const { data, error, isLoading } = useSWR('/api/ai-chat/history', fetcher, {
     refreshInterval: 0, // Don't auto-refresh chat history
-    revalidateOnFocus: false, // Don't refresh when window gains focus
+    revalidateOnFocus: false, // Don't refresh when window gains focus  
     revalidateOnReconnect: false, // Don't refresh when connection is restored
-    dedupingInterval: 1000,
+    dedupingInterval: 5000, // Dedupe requests for 5 seconds
   });
 
   // Optimistic update for sending chat messages
   const sendMessageOptimistic = async (message: string, context?: any) => {
     console.log('💬 Sending AI chat message optimistically:', message);
+    console.log('🔍 Send message context:', context);
 
     const currentData = data;
     
@@ -48,7 +44,7 @@ export function useAIChat() {
     };
 
     // Update cache optimistically
-    mutate('/api/ai-chat/session', optimisticData, false);
+    mutate('/api/ai-chat/history', optimisticData, false);
 
     try {
       // Make API call
@@ -68,6 +64,75 @@ export function useAIChat() {
 
       const result = await response.json();
       console.log('✅ AI chat message sent successfully');
+
+      // Handle executed functions for optimistic updates
+      console.log('🔍 Checking for executed functions in result:', { 
+        hasExecutedFunctions: !!result.executedFunctions,
+        executedFunctionsLength: result.executedFunctions?.length || 0,
+        resultKeys: Object.keys(result || {}),
+        fullResult: result
+      });
+      
+      if (result.executedFunctions && result.executedFunctions.length > 0) {
+        console.log('🔄 Processing executed functions for data updates:', result.executedFunctions);
+        
+        for (const func of result.executedFunctions) {
+          if (func.success) {
+            // Trigger appropriate data refreshes based on function type
+            if (func.name === 'categorize_transaction') {
+              console.log('💳 Refreshing transaction data after categorization', func.result);
+              
+              // Trigger optimistic updates if we have transaction details
+              if (func.result?.transactions && func.args?.category) {
+                const transactionIds = func.result.transactions.map((t: any) => t.id);
+                console.log('🔄 Triggering optimistic transaction updates for:', transactionIds, 'category:', func.args.category);
+                console.log('📊 Transaction details from AI function:', func.result.transactions);
+                
+                // Use the transaction details directly from the API response
+                const transactionDetails = func.result.transactions.map((t: any) => ({
+                  id: t.id,
+                  amount: t.amount,
+                  description: t.description,
+                  oldCategory: t.oldCategory || 'Needs a Category',
+                  newCategory: t.newCategory || func.args.category
+                }));
+                
+                console.log('💰 Transaction details prepared for budget updates:', transactionDetails);
+                
+                // This will be used by components that import both hooks
+                // We'll store the update details for components to use
+                window.dispatchEvent(new CustomEvent('finley-transaction-update', {
+                  detail: {
+                    transactionIds,
+                    transactionDetails,
+                    updates: { category: func.args.category },
+                    budgetId: func.args.budget_id
+                  }
+                }));
+              }
+              
+              mutate('/api/transactions');
+              mutate('/api/dashboard'); // Dashboard might show transaction data
+            } else if (func.name === 'update_budget_amount') {
+              console.log('💰 Refreshing budget data after budget update');
+              mutate('/api/dashboard');
+              mutate('/api/budgets');
+            } else if (func.name === 'transfer_money_between_budgets') {
+              console.log('🔄 Refreshing data after budget transfer');
+              mutate('/api/dashboard');
+              mutate('/api/budgets');
+            } else if (func.name === 'create_financial_goal') {
+              console.log('🎯 Refreshing goals data after goal creation');
+              mutate('/api/dashboard');
+              mutate('/api/goals');
+            } else if (func.name === 'add_budget_category') {
+              console.log('📊 Refreshing budget data after category creation');
+              mutate('/api/dashboard');
+              mutate('/api/budgets');
+            }
+          }
+        }
+      }
 
       // Update with real response
       const finalData = {
@@ -90,8 +155,8 @@ export function useAIChat() {
         ]
       };
 
-      // Force revalidate with final data
-      mutate('/api/ai-chat/session', finalData, false);
+      // Refresh chat history from server (new messages stored in database)
+      mutate('/api/ai-chat/history');
       
       return result;
     } catch (error) {
@@ -113,7 +178,7 @@ export function useAIChat() {
         ]
       };
       
-      mutate('/api/ai-chat/session', errorData, false);
+      mutate('/api/ai-chat/history', errorData, false);
       throw error;
     }
   };
@@ -154,23 +219,28 @@ export function useAIChat() {
     }
   };
 
-  // Clear chat history optimistically
+  // Clear chat history 
   const clearHistoryOptimistic = async () => {
-    console.log('🗑️ Clearing AI chat history optimistically');
+    console.log('🗑️ Clearing AI chat history');
 
-    const currentData = data;
-    
-    // Clear optimistically
-    const optimisticData = {
-      ...currentData,
-      messages: []
-    };
+    try {
+      const response = await fetch('/api/ai-chat/clear', {
+        method: 'DELETE',
+      });
 
-    mutate('/api/ai-chat/session', optimisticData, false);
+      if (!response.ok) {
+        throw new Error('Failed to clear chat history');
+      }
 
-    // Since we're using local state now, just return success
-    console.log('✅ AI chat history cleared successfully');
-    return { success: true };
+      // Refresh history from server
+      mutate('/api/ai-chat/history');
+      
+      console.log('✅ AI chat history cleared successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Failed to clear chat history:', error);
+      throw error;
+    }
   };
 
   return {
@@ -180,6 +250,6 @@ export function useAIChat() {
     sendMessageOptimistic,
     executeSuggestionOptimistic,
     clearHistoryOptimistic,
-    refresh: () => mutate('/api/ai-chat/session'),
+    refresh: () => mutate('/api/ai-chat/history'),
   };
 }

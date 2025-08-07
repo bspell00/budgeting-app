@@ -20,9 +20,56 @@ export class CreditCardAutomation {
   // not transaction creation. See processBudgetAssignment() method below.
 
   /**
+   * Check if transaction is income based on merchant name and categories
+   */
+  static isIncomeTransaction(merchantName: string, plaidCategories: string[] = [], amount?: number): boolean {
+    const merchant = merchantName.toLowerCase();
+    const categories = plaidCategories.map(cat => cat.toLowerCase());
+    
+    // Income indicators in merchant name
+    const incomeKeywords = [
+      'salary', 'payroll', 'paycheck', 'direct deposit', 'deposit',
+      'income', 'wages', 'earnings', 'pay', 'bonus', 'commission',
+      'interest earned', 'dividend', 'refund', 'cashback', 'rewards',
+      'unemployment', 'benefits', 'pension', 'social security',
+      'tax refund', 'rebate', 'settlement', 'insurance claim'
+    ];
+    
+    // Check merchant name
+    if (incomeKeywords.some(keyword => merchant.includes(keyword))) {
+      return true;
+    }
+    
+    // Check Plaid categories
+    const incomeCategoryKeywords = [
+      'payroll', 'deposit', 'interest', 'dividend', 'refund',
+      'cashback', 'rewards', 'benefits', 'pension', 'social security'
+    ];
+    
+    if (categories.some(cat => incomeCategoryKeywords.some(keyword => cat.includes(keyword)))) {
+      return true;
+    }
+    
+    // If amount is provided and positive, check for additional income indicators
+    if (amount && amount > 0) {
+      // Large round amounts often indicate salary/income
+      if (amount >= 1000 && amount % 100 === 0) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /**
    * Enhanced smart categorization using Plaid's detailed category hierarchy and predefined categories
    */
-  static categorizeTransaction(merchantName: string, plaidCategories: string[] = [], plaidDetailedCategory?: string): string {
+  static categorizeTransaction(merchantName: string, plaidCategories: string[] = [], plaidDetailedCategory?: string, amount?: number): string {
+    // Check for income transactions first
+    if (this.isIncomeTransaction(merchantName, plaidCategories, amount)) {
+      return 'To Be Assigned';
+    }
+
     const merchant = merchantName.toLowerCase();
     const primaryCategory = plaidCategories[0]?.toLowerCase() || '';
     const subCategory = plaidCategories[1]?.toLowerCase() || '';
@@ -246,7 +293,23 @@ export class CreditCardAutomation {
       'payment, credit card': 'Credit Card Payments',
       'payment, mortgage': 'Mortgage',
       'payment, rent': 'Monthly Bills',
-      'interest earned': 'Income',
+      'interest earned': 'To Be Assigned',
+      'payroll': 'To Be Assigned',
+      'salary': 'To Be Assigned',
+      'direct deposit': 'To Be Assigned',
+      'deposit': 'To Be Assigned',
+      'income': 'To Be Assigned',
+      'wages': 'To Be Assigned',
+      'bonus': 'To Be Assigned',
+      'dividend': 'To Be Assigned',
+      'refund': 'To Be Assigned',
+      'cashback': 'To Be Assigned',
+      'rewards': 'To Be Assigned',
+      'tax refund': 'To Be Assigned',
+      'unemployment': 'To Be Assigned',
+      'benefits': 'To Be Assigned',
+      'pension': 'To Be Assigned',
+      'social security': 'To Be Assigned',
       'interest charged': 'Interest Charges',
       'bank fees': 'Monthly Bills',
       'loan payments': 'Monthly Bills',

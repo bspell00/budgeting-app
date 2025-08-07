@@ -11,11 +11,21 @@ const PLAID_BASE_URLS = {
 };
 
 // Simple categorization function
-function categorizeTransaction(transactionName: string, categories: string[]): string {
+function categorizeTransaction(transactionName: string, categories: string[], amount: number): string {
   const name = transactionName.toLowerCase();
   const category = categories[0]?.toLowerCase() || '';
   
-  // Simple categorization logic
+  // Check for income transactions (positive amounts for regular accounts)
+  if (amount > 0) {
+    // Income-related terms
+    if (name.includes('salary') || name.includes('payroll') || name.includes('paycheck') ||
+        name.includes('direct deposit') || name.includes('deposit') || name.includes('income') ||
+        name.includes('interest earned') || category.includes('payroll') || category.includes('deposit')) {
+      return 'To Be Assigned';
+    }
+  }
+  
+  // Simple categorization logic for expenses
   if (name.includes('starbucks') || name.includes('dunkin') || category.includes('restaurant')) {
     return 'Food & Dining';
   }
@@ -174,7 +184,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
 
           // Categorize transaction
-          const category = categorizeTransaction(transaction.name, transaction.category || []);
+          const category = categorizeTransaction(transaction.name, transaction.category || [], amount);
 
           try {
             await prisma.transaction.create({

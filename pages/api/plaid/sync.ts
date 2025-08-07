@@ -149,19 +149,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               });
               continue; // Skip creating a new transaction
             }
-            // Enhanced smart categorization using Plaid data
-            console.log('Transaction categorization debug:', {
-              name: transaction.name,
-              category: transaction.category,
-              personal_finance_category: transaction.personal_finance_category
-            });
-            
-            let category = CreditCardAutomation.categorizeTransaction(
-              transaction.name,
-              transaction.category || [],
-              transaction.personal_finance_category?.detailed || transaction.personal_finance_category?.primary
-            );
-            
             // DEBUG: Log transaction details
             console.log('🔍 Processing Plaid sync transaction:', {
               name: transaction.name,
@@ -184,7 +171,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 // Payment: negative Plaid amount becomes positive (inflow)
                 amount = Math.abs(transaction.amount);
               }
-              
+            } else {
+              // Regular account logic:
+              // - Plaid positive amounts = deposits = positive inflows
+              // - Plaid negative amounts = spending = negative outflows
+              amount = -transaction.amount; // Flip sign for regular accounts (Plaid convention)
+            }
+            
+            // Enhanced smart categorization using Plaid data (now that amount is calculated)
+            console.log('Transaction categorization debug:', {
+              name: transaction.name,
+              category: transaction.category,
+              personal_finance_category: transaction.personal_finance_category
+            });
+            
+            let category = CreditCardAutomation.categorizeTransaction(
+              transaction.name,
+              transaction.category || [],
+              transaction.personal_finance_category?.detailed || transaction.personal_finance_category?.primary,
+              amount // Pass calculated amount for income detection
+            );
+            
+            // Override with credit card specific logic if applicable
+            if (plaidAccount?.type === 'credit') {
               // Credit card payments (negative Plaid amounts become positive after flip = payments)
               if (transaction.amount < 0) {
                 category = 'Credit Card Payments';
@@ -196,11 +205,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                        transaction.name.toLowerCase().includes('fee')) {
                 category = 'Interest & Fees';
               }
-            } else {
-              // Regular account logic:
-              // - Plaid positive amounts = deposits = positive inflows
-              // - Plaid negative amounts = spending = negative outflows
-              amount = -transaction.amount; // Flip sign for regular accounts (Plaid convention)
             }
             
             console.log('🔍 Calculated sync amount:', {
@@ -211,14 +215,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             });
             
             // Find matching budget for automatic linking
-            const budget = await prisma.budget.findFirst({
+            let budget = await prisma.budget.findFirst({
               where: {
                 userId: userId,
-                category: category,
+                name: category, // Match by budget name, not category group
                 month: new Date(transaction.date).getMonth() + 1,
                 year: new Date(transaction.date).getFullYear(),
               },
             });
+            
+            // Create "To Be Assigned" budget if it doesn't exist
+            if (!budget && category === 'To Be Assigned') {
+              budget = await prisma.budget.create({
+                data: {
+                  userId: userId,
+                  name: 'To Be Assigned',
+                  category: 'Income',
+                  amount: 0,
+                  spent: 0,
+                  month: new Date(transaction.date).getMonth() + 1,
+                  year: new Date(transaction.date).getFullYear()
+                }
+              });
+            }
             
             await prisma.transaction.create({
               data: {
@@ -237,16 +256,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               },
             });
             
-            // Update budget spent amount if linked and it's an expense (negative amount)
-            if (budget && amount < 0) {
-              await prisma.budget.update({
-                where: { id: budget.id },
-                data: {
-                  spent: {
-                    increment: Math.abs(amount)
+            // Update budget amounts based on transaction type
+            if (budget) {
+              if (amount < 0) {
+                // Expense: increment spent amount
+                await prisma.budget.update({
+                  where: { id: budget.id },
+                  data: {
+                    spent: {
+                      increment: Math.abs(amount)
+                    }
                   }
-                }
-              });
+                });
+              } else if (amount > 0 && category === 'To Be Assigned') {
+                // Income: increment budget amount (available to assign)
+                await prisma.budget.update({
+                  where: { id: budget.id },
+                  data: {
+                    amount: {
+                      increment: amount
+                    }
+                  }
+                });
+              }
             }
             
             totalNewTransactions++;

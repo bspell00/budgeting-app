@@ -121,23 +121,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
-      // Trigger credit card automation if budget amount was increased (money assigned)
-      console.log(`🔍 Budget update: ${existingBudget.name} from $${existingBudget.amount} to $${amount}`);
-      if (amount !== undefined && amount !== null && parseFloat(amount) > existingBudget.amount) {
-        const assignedAmount = parseFloat(amount) - existingBudget.amount;
-        console.log(`🔄 Triggering credit card automation for ${updatedBudget.name} - assigned $${assignedAmount}`);
-        try {
-          const result = await CreditCardAutomation.processBudgetAssignment(
-            userId,
-            updatedBudget.id,
-            assignedAmount
-          );
-          console.log(`✅ Automation result:`, result.message);
-        } catch (automationError) {
-          console.error('❌ Credit card automation failed for budget assignment:', automationError);
+      // Update "To Be Assigned" budget when money is assigned to/from budgets
+      if (amount !== undefined && amount !== null) {
+        const amountDifference = parseFloat(amount) - existingBudget.amount;
+        
+        if (amountDifference !== 0) {
+          console.log(`🔍 Budget update: ${existingBudget.name} from $${existingBudget.amount} to $${amount} (difference: ${amountDifference})`);
+          
+          // Update "To Be Assigned" budget - decrease by the amount assigned to this budget
+          const currentMonth = new Date().getMonth() + 1;
+          const currentYear = new Date().getFullYear();
+          
+          const toBeAssignedBudget = await prisma.budget.findFirst({
+            where: {
+              userId: userId,
+              name: 'To Be Assigned',
+              month: currentMonth,
+              year: currentYear,
+            },
+          });
+          
+          if (toBeAssignedBudget) {
+            const newToBeAssignedAmount = toBeAssignedBudget.amount - amountDifference;
+            await prisma.budget.update({
+              where: { id: toBeAssignedBudget.id },
+              data: { amount: newToBeAssignedAmount },
+            });
+            console.log(`💰 Updated "To Be Assigned" from $${toBeAssignedBudget.amount} to $${newToBeAssignedAmount}`);
+          } else {
+            console.warn('⚠️  "To Be Assigned" budget not found - this should not happen');
+          }
         }
-      } else {
-        console.log(`⏭️  No automation needed - budget not increased`);
+        
+        // Trigger credit card automation if budget amount was increased (money assigned)
+        if (parseFloat(amount) > existingBudget.amount) {
+          const assignedAmount = parseFloat(amount) - existingBudget.amount;
+          console.log(`🔄 Triggering credit card automation for ${updatedBudget.name} - assigned $${assignedAmount}`);
+          try {
+            const result = await CreditCardAutomation.processBudgetAssignment(
+              userId,
+              updatedBudget.id,
+              assignedAmount
+            );
+            console.log(`✅ Automation result:`, result.message);
+          } catch (automationError) {
+            console.error('❌ Credit card automation failed for budget assignment:', automationError);
+          }
+        }
       }
 
       res.json(updatedBudget);

@@ -23,6 +23,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Auto-categorize income transactions
+    let finalCategory = category;
+    if (parseFloat(amount) > 0) {
+      // Check if this is income by using our income detection logic
+      if (CreditCardAutomation.isIncomeTransaction(description, [], parseFloat(amount))) {
+        finalCategory = 'To Be Assigned';
+      }
+    }
+
     try {
       let account;
       
@@ -71,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let budget = await prisma.budget.findFirst({
         where: {
           userId: userId,
-          name: category, // Match by budget name, not category
+          name: finalCategory, // Use finalCategory instead of category
           month: month,
           year: year,
         }
@@ -79,13 +88,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Auto-create budget if it doesn't exist
       if (!budget) {
-        budget = await CreditCardAutomation.getOrCreateBudget(
-          userId,
-          category,
-          month,
-          year,
-          100 // Default $100 budget
-        );
+        // For "To Be Assigned", ensure it's in the Income category group
+        if (finalCategory === 'To Be Assigned') {
+          budget = await prisma.budget.create({
+            data: {
+              userId: userId,
+              name: 'To Be Assigned',
+              category: 'Income',
+              amount: 0,
+              spent: 0,
+              month: month,
+              year: year
+            }
+          });
+        } else {
+          budget = await CreditCardAutomation.getOrCreateBudget(
+            userId,
+            finalCategory,
+            month,
+            year,
+            100 // $100 default for other categories
+          );
+        }
       }
 
       // Determine if this is a connected account (not manual entry)
@@ -99,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           plaidTransactionId: 'manual_' + Date.now(),
           amount: parseFloat(amount),
           description,
-          category,
+          category: finalCategory,
           date: transactionDate,
           cleared: !isConnectedAccount, // Uncleared for connected accounts, cleared for manual entry
           isManual: true,
@@ -107,15 +131,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
-      // Update budget spent amount if budget exists and it's spending (any non-zero amount)
-      if (budget && parseFloat(amount) !== 0) {
-        // For spending, we always use the absolute value to increment 'spent'
+      // Update budget spent amount if budget exists and it's spending (negative amount)
+      if (budget && parseFloat(amount) < 0) {
+        // Only increment 'spent' for expense transactions (negative amounts)
         const spendingAmount = Math.abs(parseFloat(amount));
         await prisma.budget.update({
           where: { id: budget.id },
           data: {
             spent: {
               increment: spendingAmount
+            }
+          }
+        });
+      } else if (budget && parseFloat(amount) > 0 && finalCategory === 'To Be Assigned') {
+        // For income transactions, increase the budget amount instead of spent
+        await prisma.budget.update({
+          where: { id: budget.id },
+          data: {
+            amount: {
+              increment: parseFloat(amount)
             }
           }
         });

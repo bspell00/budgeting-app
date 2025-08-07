@@ -1,5 +1,12 @@
 // Predefined budget categories and groups
 export const DEFAULT_BUDGET_CATEGORIES = [
+  // Income Category Group - Special category for incoming funds
+  {
+    categoryGroup: 'Income',
+    categories: [
+      'To Be Assigned'
+    ]
+  },
   // Bills Category Group
   {
     categoryGroup: 'Bills',

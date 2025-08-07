@@ -1,0 +1,18 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+Allow: /auth/signin
+Allow: /auth/signup
+Allow: /auth/forgot-password
+Allow: /reset-password
+
+# Disallow private/authenticated areas
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /test/
+
+# Sitemap
+Sitemap: https://aamoney.cc/sitemap.xml
+
+# Crawl delay
+Crawl-delay: 1
