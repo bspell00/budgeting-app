@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Get recent conversation history (last 50 messages)
-    const messages = await (prisma as any).chatMessage.findMany({
+    const messages = await prisma.chatMessage.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50
