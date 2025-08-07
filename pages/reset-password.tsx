@@ -40,11 +40,31 @@ export default function ResetPassword() {
       return;
     }
 
-    // For development - just show success after delay
-    setTimeout(() => {
-      setSuccess(true);
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          token,
+          email,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(true);
+      } else {
+        setError(data.error || 'Failed to reset password');
+      }
+    } catch (error) {
+      setError('Network error. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   if (!token || !email) {
