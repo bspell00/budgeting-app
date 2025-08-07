@@ -94,11 +94,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // The "To Be Assigned" budget amount should now be correctly maintained by transaction imports
-    console.log('💰 "To Be Assigned" budget should be automatically maintained by transaction imports');
+    // Log current status
+    console.log('💰 "To Be Assigned" budget should be maintained by dashboard calculation');
     
     if (toBeAssignedRecord) {
-      console.log(`💰 Current "To Be Assigned" amount: $${toBeAssignedRecord.amount.toFixed(2)}`);
+      console.log(`💰 Current "To Be Assigned": $${toBeAssignedRecord.amount.toFixed(2)}`);
     } else {
       console.warn('⚠️ "To Be Assigned" budget record not found - this should not happen');
     }
@@ -157,8 +157,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const totalDebtBalance = debtAccounts.reduce((sum, account) => sum + account.balance, 0);
     const totalBalance = totalCashBalance + totalDebtBalance; // For display purposes
     
-    // Get "To Be Assigned" amount from the budget (YNAB methodology)
+    // CORRECT "To Be Assigned" calculation: Total Available Cash - Total Budgeted
+    console.log('💰 Calculating correct "To Be Assigned" amount...');
+    
+    // Get all budgets for current month EXCEPT "To Be Assigned"
+    const allBudgetsExceptTBA = budgets.filter(budget => budget.name !== 'To Be Assigned');
+    const totalBudgetedByUser = allBudgetsExceptTBA.reduce((sum, budget) => sum + budget.amount, 0);
+    
+    // "To Be Assigned" should be: Total Cash - Total User Budgeted
+    const correctToBeAssigned = totalCashBalance - totalBudgetedByUser;
+    
+    console.log(`💰 Total cash balance: $${totalCashBalance.toFixed(2)}`);
+    console.log(`💰 Total user budgeted: $${totalBudgetedByUser.toFixed(2)}`);
+    console.log(`💰 Correct "To Be Assigned": $${correctToBeAssigned.toFixed(2)}`);
+    
+    // Find "To Be Assigned" budget and update if needed
     const toBeAssignedBudget = budgets.find(budget => budget.name === 'To Be Assigned');
+    if (toBeAssignedBudget && Math.abs(toBeAssignedBudget.amount - correctToBeAssigned) > 0.01) {
+      console.log(`🔄 Updating "To Be Assigned" from $${toBeAssignedBudget.amount.toFixed(2)} to $${correctToBeAssigned.toFixed(2)}`);
+      await prisma.budget.update({
+        where: { id: toBeAssignedBudget.id },
+        data: { amount: correctToBeAssigned }
+      });
+      // Update the budget in our array for consistent display
+      toBeAssignedBudget.amount = correctToBeAssigned;
+    }
+    
+    // Get "To Be Assigned" amount from the budget (YNAB methodology) 
     const toBeAssigned = toBeAssignedBudget ? toBeAssignedBudget.amount - toBeAssignedBudget.spent : 0;
 
     // Group budgets by category (Bills, Frequent, etc.)

@@ -144,15 +144,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         });
       } else if (budget && parseFloat(amount) > 0 && finalCategory === 'To Be Assigned') {
-        // For income transactions, increase the budget amount instead of spent
-        await prisma.budget.update({
-          where: { id: budget.id },
-          data: {
-            amount: {
-              increment: parseFloat(amount)
-            }
-          }
-        });
+        // Income transactions are tracked but "To Be Assigned" amount is calculated from account balances
+        console.log(`💰 Manual income transaction: $${amount} → "To Be Assigned" (amount calculated from account balances)`);
       }
 
       // Update account balance
