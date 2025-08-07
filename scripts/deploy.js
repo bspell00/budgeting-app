@@ -15,11 +15,12 @@ const SCHEMA_PATH = path.join(__dirname, '../prisma/schema.prisma');
 const PRODUCTION_SCHEMA_PATH = path.join(__dirname, '../prisma/schema.production.prisma');
 
 try {
+  let schemaToUse = SCHEMA_PATH;
+  
   if (isProduction) {
     // Use production schema for Heroku
     if (fs.existsSync(PRODUCTION_SCHEMA_PATH)) {
-      const productionSchema = fs.readFileSync(PRODUCTION_SCHEMA_PATH, 'utf8');
-      fs.writeFileSync(SCHEMA_PATH, productionSchema);
+      schemaToUse = PRODUCTION_SCHEMA_PATH;
       console.log('✅ Using PostgreSQL schema for production');
     } else {
       console.log('⚠️  Production schema not found, using default');
@@ -29,7 +30,7 @@ try {
   }
 
   console.log('🔄 Generating Prisma client...');
-  execSync('npx prisma generate', { stdio: 'inherit' });
+  execSync(`npx prisma generate --schema="${schemaToUse}"`, { stdio: 'inherit' });
   console.log('✅ Schema setup complete!');
 } catch (error) {
   console.error('❌ Error setting up schema:', error.message);
