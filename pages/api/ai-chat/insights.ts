@@ -39,7 +39,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Get recent conversation history (last 30 messages for analysis)
-    const messages = await prisma.chatMessage.findMany({
+    const messages = await (prisma as any).chatMessage.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 30
@@ -51,7 +51,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Prepare conversation text for analysis
     const conversationText = messages.reverse()
-      .map(msg => `${msg.type.toUpperCase()}: ${msg.content}`)
+      .map((msg: any) => `${msg.type.toUpperCase()}: ${msg.content}`)
       .join('\n\n');
 
     // Extract structured insights using OpenAI

@@ -49,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { message, history = [] }: ChatRequest = req.body;
 
     // Store user message in database
-    const userMessage = await prisma.chatMessage.create({
+    const userMessage = await (prisma as any).chatMessage.create({
       data: {
         userId,
         type: 'user',
@@ -850,7 +850,7 @@ Instructions: Use functions to take actions when users request changes. Always e
       executedFunctions: executedFunctions.length > 0 ? executedFunctions : undefined
     };
     
-    await prisma.chatMessage.create({
+    await (prisma as any).chatMessage.create({
       data: {
         userId: userId,
         type: 'ai',

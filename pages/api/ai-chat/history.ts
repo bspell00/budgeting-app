@@ -22,14 +22,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Get recent conversation history (last 50 messages)
-    const messages = await prisma.chatMessage.findMany({
+    const messages = await (prisma as any).chatMessage.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50
     });
 
     // Reverse to get chronological order and format for frontend
-    const formattedMessages = messages.reverse().map(msg => {
+    const formattedMessages = messages.reverse().map((msg: any) => {
       const actions = msg.metadata ? 
         JSON.parse(msg.metadata).actions || [] : 
         [];
