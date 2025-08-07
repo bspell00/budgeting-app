@@ -396,6 +396,9 @@ COMPREHENSIVE FINANCIAL OVERVIEW:
 - Total Debt: $${analysis.totalDebt.toFixed(2)}
 - Accounts: ${accounts.length} total
 
+📱 AVAILABLE ACCOUNTS:
+${accounts.map((a: any) => `- ${a.accountName} (${a.accountType}${a.accountSubtype ? `/${a.accountSubtype}` : ''}) - ID: ${a.id} - Balance: $${a.balance.toFixed(2)}`).join('\n')}
+
 📊 BUDGET PERFORMANCE:
 - Total Budgeted: $${analysis.totalBudgeted.toFixed(2)}
 - Total Spent: $${analysis.totalSpent.toFixed(2)}
@@ -456,6 +459,15 @@ You can help users manage their transactions by:
 2. Recategorizing existing transactions when they seem incorrectly categorized
 3. Updating transaction details like descriptions or amounts
 
+ACCOUNT SELECTION RULES:
+When creating transactions, you must choose the appropriate account:
+- For CASH purchases/expenses: Use checking or debit accounts (accountType: 'depository', subtype: 'checking')
+- For CREDIT CARD purchases: Use credit card accounts (accountType: 'credit')
+- For INCOME/PAYCHECKS: Use checking accounts (primary depository account)
+- For SAVINGS transactions: Use savings accounts (accountType: 'depository', subtype: 'savings')
+
+IMPORTANT: If the user mentions a transaction but you're unsure which account to use (e.g., they have multiple credit cards or checking accounts), DO NOT create the transaction immediately. Instead, ask them to clarify which specific account they used for the transaction. Only create transactions when you're confident about the account selection.
+
 When a user mentions a transaction that should be created or updated, use the appropriate function to help them.
 
 RESPONSE STYLE:
@@ -480,7 +492,7 @@ Focus on being helpful, insightful, and specific to their situation. Always refe
       functions: [
         {
           name: "create_transaction",
-          description: "Create a new transaction for the user",
+          description: "Create a new transaction for the user. Only use this function when you're confident about which account to use. If unsure about the account, ask the user for clarification instead.",
           parameters: {
             type: "object",
             properties: {
@@ -502,10 +514,10 @@ Focus on being helpful, insightful, and specific to their situation. Always refe
               },
               accountId: {
                 type: "string",
-                description: "Account ID (optional, defaults to Manual Entry account)"
+                description: "Account ID from the AVAILABLE ACCOUNTS list. Required when creating transactions. Choose based on transaction type: credit card purchases use credit accounts, cash/debit use checking accounts, income goes to primary checking."
               }
             },
-            required: ["amount", "description", "category"]
+            required: ["amount", "description", "category", "accountId"]
           }
         },
         {
@@ -524,6 +536,25 @@ Focus on being helpful, insightful, and specific to their situation. Always refe
               }
             },
             required: ["transactionId", "category"]
+          }
+        },
+        {
+          name: "ask_for_account_clarification",
+          description: "Ask the user to clarify which account to use when creating a transaction. Use this when you're unsure which account the user wants to use.",
+          parameters: {
+            type: "object",
+            properties: {
+              transactionType: {
+                type: "string",
+                description: "Type of transaction (e.g., 'credit card purchase', 'cash payment', 'income deposit')"
+              },
+              suggestedAccounts: {
+                type: "array",
+                items: { type: "string" },
+                description: "List of account IDs that could be appropriate for this transaction"
+              }
+            },
+            required: ["transactionType", "suggestedAccounts"]
           }
         }
       ],
@@ -550,6 +581,9 @@ Focus on being helpful, insightful, and specific to their situation. Always refe
             break;
           case 'recategorize_transaction':
             functionResult = await handleRecategorizeTransaction(userId, functionArgs);
+            break;
+          case 'ask_for_account_clarification':
+            functionResult = await handleAccountClarification(userId, functionArgs, accounts);
             break;
           default:
             console.warn('Unknown function call:', responseMessage.function_call.name);
@@ -686,6 +720,10 @@ async function handleCreateTransaction(userId: string, args: any) {
       throw new Error('Missing required fields: amount, description, category');
     }
 
+    if (!accountId) {
+      throw new Error('Account ID is required. Please specify which account this transaction should be added to.');
+    }
+
     // Auto-categorize income transactions using the same logic as the main endpoint
     let finalCategory = category;
     if (parseFloat(amount) > 0) {
@@ -694,42 +732,16 @@ async function handleCreateTransaction(userId: string, args: any) {
       }
     }
 
-    // Find or create account
-    let account;
-    if (accountId) {
-      account = await prisma.account.findFirst({
-        where: { 
-          id: accountId,
-          userId: userId
-        }
-      });
-      
-      if (!account) {
-        throw new Error('Account not found or access denied');
+    // Find the specified account
+    const account = await prisma.account.findFirst({
+      where: { 
+        id: accountId,
+        userId: userId
       }
-    } else {
-      // Use Manual Entry account
-      account = await prisma.account.findFirst({
-        where: { 
-          userId: userId,
-          accountName: 'Manual Entry'
-        }
-      });
-
-      if (!account) {
-        account = await prisma.account.create({
-          data: {
-            userId: userId,
-            plaidAccountId: 'manual_' + userId,
-            plaidAccessToken: 'manual',
-            accountName: 'Manual Entry',
-            accountType: 'manual',
-            accountSubtype: 'manual',
-            balance: 0,
-            availableBalance: 0,
-          }
-        });
-      }
+    });
+    
+    if (!account) {
+      throw new Error(`Account with ID '${accountId}' not found or access denied. Please check the available accounts and try again.`);
     }
 
     // Find or create budget
@@ -933,6 +945,47 @@ async function handleRecategorizeTransaction(userId: string, args: any) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to recategorize transaction'
+    };
+  }
+}
+
+async function handleAccountClarification(userId: string, args: any, accounts: any[]) {
+  try {
+    console.log('🔧 Requesting account clarification:', args);
+    
+    const { transactionType, suggestedAccounts } = args;
+
+    // Get the suggested account details
+    const suggestedAccountDetails = accounts.filter(account => 
+      suggestedAccounts.includes(account.id)
+    );
+
+    if (suggestedAccountDetails.length === 0) {
+      throw new Error('No valid account suggestions found');
+    }
+
+    // Format the account options for the user
+    const accountOptions = suggestedAccountDetails.map(account => ({
+      id: account.id,
+      name: account.accountName,
+      type: `${account.accountType}${account.accountSubtype ? `/${account.accountSubtype}` : ''}`,
+      balance: account.balance
+    }));
+
+    console.log('✅ Account clarification prepared');
+    
+    return {
+      success: true,
+      clarificationNeeded: true,
+      transactionType,
+      accountOptions,
+      message: `I need to know which account you used for this ${transactionType}. Please specify which account:`
+    };
+  } catch (error) {
+    console.error('❌ Error preparing account clarification:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to prepare account clarification'
     };
   }
 }
