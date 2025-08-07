@@ -48,6 +48,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { message, history = [] }: ChatRequest = req.body;
 
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+      console.error('❌ Invalid message received:', message);
+      return res.status(400).json({ error: 'Message is required and cannot be empty' });
+    }
+
+    console.log('✅ Processing AI chat message:', { userId, messageLength: message.length });
+
     // Store user message in database
     const userMessage = await (prisma as any).chatMessage.create({
       data: {
@@ -56,6 +63,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         content: message
       }
     });
+
+    console.log('✅ User message stored in database:', userMessage.id);
 
     // Get recent conversation history from database (last 20 messages)
     const dbHistory = await (prisma as any).chatMessage.findMany({
@@ -70,15 +79,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       content: msg.content
     }));
 
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ error: 'Message is required' });
-    }
 
     // Get COMPREHENSIVE financial data for robust analysis
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
     const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
     const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+    console.log('📊 Fetching financial data...');
 
     const [
       budgets, 
@@ -163,6 +171,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         take: 100
       })
     ]);
+
+    console.log('✅ Financial data fetched successfully:', {
+      budgets: budgets.length,
+      accounts: accounts.length,
+      currentTransactions: currentTransactions.length,
+      goals: goals.length
+    });
 
     // COMPREHENSIVE FINANCIAL ANALYSIS ENGINE
     
@@ -288,6 +303,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       (a.year * 12 + a.month) - (b.year * 12 + b.month)
     );
 
+    console.log('🤖 Calling OpenAI API for response generation...');
+
     // Generate comprehensive AI response
     const aiResponse = await generateOpenAIResponse(message, userId, conversationHistory, {
       // Raw Data
@@ -350,7 +367,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.json(aiResponse);
   } catch (error) {
-    console.error('AI Chat Error:', error);
+    console.error('❌ AI Chat Error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      userId,
+      messageReceived: !!req.body.message
+    });
     
     // Return a user-friendly error response instead of just an error status
     res.status(200).json({
@@ -396,12 +418,14 @@ async function generateOpenAIResponse(message: string, userId: string, conversat
 
   // Check if OpenAI API key is available
   if (!hasOpenAIKey) {
-    console.warn('OpenAI API key not configured, using basic response');
+    console.warn('❌ OpenAI API key not configured, using basic response');
     return {
       message: "I need an OpenAI API key to provide personalized financial analysis. Please configure the API key to unlock my full capabilities.",
       actions: []
     };
   }
+
+  console.log('✅ OpenAI API key available, proceeding with AI response generation');
 
   // Create comprehensive financial data context
   const financialDataContext = `
@@ -504,6 +528,7 @@ ${overspentBudgets.map((b: any) =>
   // Use conversationHistory passed as parameter
 
   try {
+    console.log('🤖 Making OpenAI API call...');
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -732,8 +757,12 @@ Instructions: Use functions to take actions when users request changes. Always e
       tool_choice: "auto"
     });
 
+    console.log('✅ OpenAI API response received');
+    
     const responseMessage = completion.choices[0]?.message;
     let aiMessage = responseMessage?.content || "I'm here to help analyze your financial data!";
+    
+    console.log('📝 AI message length:', aiMessage.length);
     
     // Handle function calls
     const executedFunctions: any[] = [];
@@ -866,7 +895,12 @@ Instructions: Use functions to take actions when users request changes. Always e
     };
 
   } catch (error) {
-    console.error('OpenAI API Error:', error);
+    console.error('❌ OpenAI API Error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack trace',
+      userId,
+      messageLength: message.length
+    });
     
     return {
       message: "I'm having trouble accessing my AI capabilities right now. Please try again in a moment.",

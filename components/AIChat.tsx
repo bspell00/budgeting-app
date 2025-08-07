@@ -195,6 +195,20 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
     }, 30000);
 
     try {
+      // Temporarily use test endpoint to isolate the issue
+      console.log('🔄 Testing with simple API call...');
+      const response = await fetch('/api/test-ai', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Test API failed: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Test API response:', result);
+
       // Use optimistic update for sending message
       console.log('🔄 Calling sendMessageOptimistic...');
       await sendMessageOptimistic(messageText, {
@@ -250,7 +264,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
           messages: [...(currentData?.messages || []), suggestionsMessage]
         };
 
-        mutate('/api/ai-chat/session', updatedData, false);
+        mutate('/api/ai-chat/history', updatedData, false);
         return;
       }
 
@@ -298,7 +312,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
           messages: [...(currentData?.messages || []), conversationMessage]
         };
 
-        mutate('/api/ai-chat/session', updatedData, false);
+        mutate('/api/ai-chat/history', updatedData, false);
         return;
       }
 
@@ -355,7 +369,7 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
         };
 
         // Update the cache with confirmation message
-        mutate('/api/ai-chat/session', updatedData, false);
+        mutate('/api/ai-chat/history', updatedData, false);
         return;
       }
 
