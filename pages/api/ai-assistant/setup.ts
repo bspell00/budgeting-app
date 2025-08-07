@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
-import { PrismaClient, AIAssistant } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { createOrGetAssistant, createThread } from '../../../lib/assistant';
 
 const prisma = new PrismaClient();
