@@ -11,6 +11,14 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['@prisma/client'],
   },
+  
+  // WebSocket support
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals.push('socket.io');
+    }
+    return config;
+  },
   // SEO and Performance Optimizations
   compress: true,
   poweredByHeader: false,

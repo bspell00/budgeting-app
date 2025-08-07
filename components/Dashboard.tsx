@@ -17,6 +17,7 @@ import DebtPayoffStrategies from './DebtPayoffStrategies';
 import { useDashboard } from '../hooks/useDashboard';
 import { useTransactions } from '../hooks/useTransactions';
 import { useAccounts } from '../hooks/useAccounts';
+import { useWebSocket } from '../hooks/useWebSocket';
 import { useAlert } from './ModalAlert';
 import { 
   PlusCircle, 
@@ -91,11 +92,15 @@ const Dashboard = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   
+  // WebSocket connection for real-time updates
+  const { connected: wsConnected, requestSync } = useWebSocket();
+  
   // SWR hooks for real-time data
   const { 
     data: dashboardData, 
     error: dashboardError, 
     isLoading: dashboardLoading,
+    connected,
     updateBudgetOptimistic,
     updateTransactionCategoriesOptimistic,
     createBudgetOptimistic,

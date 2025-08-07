@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../lib/auth';
 import { getUserTransactionsFromConnectedAccounts } from '../../lib/transaction-validation';
+import { FinancialCalculator } from '../../lib/financial-calculator';
 import CreditCardAutomation from '../../lib/credit-card-automation';
 import prisma from '../../lib/prisma';
 
@@ -112,55 +113,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Determine if this is a connected account (not manual entry)
-      const isConnectedAccount = account.accountType !== 'manual';
-      
-      const transaction = await prisma.transaction.create({
-        data: {
-          userId: userId,
-          accountId: account.id,
-          budgetId: budget?.id || null,
-          plaidTransactionId: 'manual_' + Date.now(),
-          amount: parseFloat(amount),
-          description,
-          category: finalCategory,
-          date: transactionDate,
-          cleared: !isConnectedAccount, // Uncleared for connected accounts, cleared for manual entry
-          isManual: true,
-          approved: true, // Manual transactions are automatically approved
-        },
+      // Use the centralized financial calculator for transaction creation
+      const transaction = await FinancialCalculator.createTransactionWithSync({
+        userId: userId,
+        accountId: account.id,
+        budgetId: budget?.id || null,
+        amount: parseFloat(amount),
+        description,
+        category: finalCategory,
+        date: transactionDate,
+        plaidTransactionId: 'manual_' + Date.now(),
+        isManual: true,
+        cleared: account.accountType !== 'manual', // Uncleared for connected accounts, cleared for manual entry
+        approved: true, // Manual transactions are automatically approved
       });
 
-      // Update budget spent amount if budget exists and it's spending (negative amount)
-      if (budget && parseFloat(amount) < 0) {
-        // Only increment 'spent' for expense transactions (negative amounts)
-        const spendingAmount = Math.abs(parseFloat(amount));
-        await prisma.budget.update({
-          where: { id: budget.id },
-          data: {
-            spent: {
-              increment: spendingAmount
-            }
-          }
-        });
-      } else if (budget && parseFloat(amount) > 0 && finalCategory === 'To Be Assigned') {
-        // Income transactions are tracked but "To Be Assigned" amount is calculated from account balances
-        console.log(`💰 Manual income transaction: $${amount} → "To Be Assigned" (amount calculated from account balances)`);
-      }
-
-      // Update account balance
-      await prisma.account.update({
-        where: { id: account.id },
-        data: {
-          balance: {
-            increment: parseFloat(amount)
-          }
-        }
-      });
-
-      // Note: Credit card automation is now triggered by budget assignments, not transaction creation
-      // This ensures money only moves when you manually assign budget to cover expenses
-
+      console.log(`✅ Transaction created with WebSocket sync: ${description} - $${amount}`);
       res.status(201).json(transaction);
     } catch (error) {
       console.error('Error creating transaction:', error);
