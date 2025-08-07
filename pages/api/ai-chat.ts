@@ -58,14 +58,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Get recent conversation history from database (last 20 messages)
-    const dbHistory = await prisma.chatMessage.findMany({
+    const dbHistory = await (prisma as any).chatMessage.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 20
     });
 
     // Reverse to get chronological order (oldest first)
-    const conversationHistory = dbHistory.reverse().map(msg => ({
+    const conversationHistory = dbHistory.reverse().map((msg: any) => ({
       role: msg.type === 'user' ? 'user' : 'assistant',
       content: msg.content
     }));
