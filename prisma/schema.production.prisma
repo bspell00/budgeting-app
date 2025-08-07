@@ -45,38 +45,6 @@ model Account {
   @@index([userId])
 }
 
-model ChatMessage {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String   // 'user' or 'ai'
-  content   String
-  metadata  String?  // JSON for function calls, actions, etc.
-  sessionId String?  // Optional session grouping
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([sessionId])
-  @@index([createdAt])
-}
-
-model AIAssistant {
-  id           String   @id @default(cuid())
-  userId       String   @unique // One assistant per user
-  assistantId  String   // OpenAI Assistant ID
-  threadId     String?  // Current conversation thread
-  name         String   @default("Finley")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([assistantId])
-}
-
 model Budget {
   id        String   @id @default(cuid())
   userId    String
@@ -98,38 +66,6 @@ model Budget {
   @@index([userId])
 }
 
-model ChatMessage {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String   // 'user' or 'ai'
-  content   String
-  metadata  String?  // JSON for function calls, actions, etc.
-  sessionId String?  // Optional session grouping
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([sessionId])
-  @@index([createdAt])
-}
-
-model AIAssistant {
-  id           String   @id @default(cuid())
-  userId       String   @unique // One assistant per user
-  assistantId  String   // OpenAI Assistant ID
-  threadId     String?  // Current conversation thread
-  name         String   @default("Finley")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([assistantId])
-}
-
 model Transaction {
   id                  String    @id @default(cuid())
   userId              String
@@ -146,6 +82,8 @@ model Transaction {
   approved            Boolean   @default(false)
   isManual            Boolean   @default(false)
   flagColor           String?
+  embedding           String?   // JSON array of float values for vector search
+  embeddingCreatedAt  DateTime? // Track when embedding was generated
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -178,38 +116,6 @@ model Goal {
   @@index([userId])
 }
 
-model ChatMessage {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String   // 'user' or 'ai'
-  content   String
-  metadata  String?  // JSON for function calls, actions, etc.
-  sessionId String?  // Optional session grouping
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([sessionId])
-  @@index([createdAt])
-}
-
-model AIAssistant {
-  id           String   @id @default(cuid())
-  userId       String   @unique // One assistant per user
-  assistantId  String   // OpenAI Assistant ID
-  threadId     String?  // Current conversation thread
-  name         String   @default("Finley")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([assistantId])
-}
-
 model BudgetTransfer {
   id              String   @id @default(cuid())
   userId          String
@@ -227,38 +133,6 @@ model BudgetTransfer {
   @@index([userId])
 }
 
-model ChatMessage {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String   // 'user' or 'ai'
-  content   String
-  metadata  String?  // JSON for function calls, actions, etc.
-  sessionId String?  // Optional session grouping
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([sessionId])
-  @@index([createdAt])
-}
-
-model AIAssistant {
-  id           String   @id @default(cuid())
-  userId       String   @unique // One assistant per user
-  assistantId  String   // OpenAI Assistant ID
-  threadId     String?  // Current conversation thread
-  name         String   @default("Finley")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([assistantId])
-}
-
 model Payee {
   id          String   @id @default(cuid())
   userId      String
@@ -273,38 +147,6 @@ model Payee {
 
   @@unique([userId, name])
   @@index([userId])
-}
-
-model ChatMessage {
-  id        String   @id @default(cuid())
-  userId    String
-  type      String   // 'user' or 'ai'
-  content   String
-  metadata  String?  // JSON for function calls, actions, etc.
-  sessionId String?  // Optional session grouping
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([sessionId])
-  @@index([createdAt])
-}
-
-model AIAssistant {
-  id           String   @id @default(cuid())
-  userId       String   @unique // One assistant per user
-  assistantId  String   // OpenAI Assistant ID
-  threadId     String?  // Current conversation thread
-  name         String   @default("Finley")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([assistantId])
 }
 
 model AIPlan {
