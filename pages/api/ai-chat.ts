@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../lib/auth';
 import { PrismaClient } from '@prisma/client';
 import OpenAI from 'openai';
+import CreditCardAutomation from '../../lib/credit-card-automation';
 
 const prisma = new PrismaClient();
 const openai = new OpenAI({
@@ -420,6 +421,9 @@ ${analysis.topMerchants.map((m: any, i: number) => `${i + 1}. ${m.merchant}: $${
 🎯 GOALS:
 ${goals.length > 0 ? goals.map((g: any) => `- ${g.name}: ${analysis.goalAnalysis.find((ga: any) => ga.id === g.id)?.progress?.toFixed(1) || 0}% complete`).join('\n') : '- No goals set'}
 
+📝 RECENT TRANSACTIONS (for reference):
+${currentTransactions.slice(0, 10).map((t: any) => `- ID: ${t.id} | $${t.amount.toFixed(2)} | ${t.description} | ${t.category || 'Uncategorized'} | ${new Date(t.date).toLocaleDateString()}`).join('\n')}
+
 ⚠️ ALERTS & INSIGHTS:
 ${analysis.overspentBudgets.length > 0 ? `- You're overspending in ${analysis.overspentBudgets.length} categories` : '- Budget is on track'}
 ${analysis.savingsRate < 10 ? '- Savings rate is below recommended 10%' : '- Healthy savings rate'}
@@ -443,6 +447,16 @@ CAPABILITIES:
 - Help set and track meaningful financial goals
 - Spot unusual transactions or concerning trends
 - Provide context-aware advice based on the user's specific situation
+- Create new transactions when requested
+- Recategorize existing transactions to improve budget accuracy
+
+TRANSACTION MANAGEMENT:
+You can help users manage their transactions by:
+1. Creating new transactions when they mention purchases, payments, or income
+2. Recategorizing existing transactions when they seem incorrectly categorized
+3. Updating transaction details like descriptions or amounts
+
+When a user mentions a transaction that should be created or updated, use the appropriate function to help them.
 
 RESPONSE STYLE:
 - Use specific numbers and insights from their actual financial data
@@ -462,13 +476,100 @@ Focus on being helpful, insightful, and specific to their situation. Always refe
         }
       ],
       max_tokens: 1000,
-      temperature: 0.4
+      temperature: 0.4,
+      functions: [
+        {
+          name: "create_transaction",
+          description: "Create a new transaction for the user",
+          parameters: {
+            type: "object",
+            properties: {
+              amount: {
+                type: "number",
+                description: "Transaction amount (positive for income, negative for expenses)"
+              },
+              description: {
+                type: "string",
+                description: "Description of the transaction"
+              },
+              category: {
+                type: "string",
+                description: "Budget category for the transaction"
+              },
+              date: {
+                type: "string",
+                description: "Date of transaction in YYYY-MM-DD format (optional, defaults to today)"
+              },
+              accountId: {
+                type: "string",
+                description: "Account ID (optional, defaults to Manual Entry account)"
+              }
+            },
+            required: ["amount", "description", "category"]
+          }
+        },
+        {
+          name: "recategorize_transaction",
+          description: "Change the category of an existing transaction",
+          parameters: {
+            type: "object",
+            properties: {
+              transactionId: {
+                type: "string",
+                description: "ID of the transaction to recategorize"
+              },
+              category: {
+                type: "string",
+                description: "New budget category for the transaction"
+              }
+            },
+            required: ["transactionId", "category"]
+          }
+        }
+      ],
+      function_call: "auto"
     });
 
     console.log('✅ OpenAI API response received');
     
     const responseMessage = completion.choices[0]?.message;
     let aiMessage = responseMessage?.content || "I'm here to help analyze your financial data!";
+    
+    // Handle function calls if present
+    let functionResults: any[] = [];
+    if (responseMessage?.function_call) {
+      console.log('🔧 Function call detected:', responseMessage.function_call.name);
+      
+      try {
+        const functionArgs = JSON.parse(responseMessage.function_call.arguments);
+        let functionResult = null;
+
+        switch (responseMessage.function_call.name) {
+          case 'create_transaction':
+            functionResult = await handleCreateTransaction(userId, functionArgs);
+            break;
+          case 'recategorize_transaction':
+            functionResult = await handleRecategorizeTransaction(userId, functionArgs);
+            break;
+          default:
+            console.warn('Unknown function call:', responseMessage.function_call.name);
+        }
+
+        if (functionResult) {
+          functionResults.push({
+            function: responseMessage.function_call.name,
+            args: functionArgs,
+            result: functionResult
+          });
+        }
+      } catch (error) {
+        console.error('Error executing function call:', error);
+        functionResults.push({
+          function: responseMessage.function_call.name,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
     
     console.log('📝 AI message length:', aiMessage.length);
     
@@ -542,7 +643,8 @@ Focus on being helpful, insightful, and specific to their situation. Always refe
       message: aiMessage,
       actions: actions.slice(0, 4), // Limit to 4 actions
       insights: metadata.insights,
-      healthScore: analysis.healthScore
+      healthScore: analysis.healthScore,
+      functionResults: functionResults.length > 0 ? functionResults : undefined
     };
 
   } catch (error) {
@@ -569,6 +671,268 @@ Focus on being helpful, insightful, and specific to their situation. Always refe
           data: {}
         }
       ]
+    };
+  }
+}
+
+// Function handlers for AI-driven transaction management
+async function handleCreateTransaction(userId: string, args: any) {
+  try {
+    console.log('🔧 Creating transaction:', args);
+    
+    const { amount, description, category, date, accountId } = args;
+
+    if (!amount || !description || !category) {
+      throw new Error('Missing required fields: amount, description, category');
+    }
+
+    // Auto-categorize income transactions using the same logic as the main endpoint
+    let finalCategory = category;
+    if (parseFloat(amount) > 0) {
+      if (CreditCardAutomation.isIncomeTransaction(description, [], parseFloat(amount))) {
+        finalCategory = 'To Be Assigned';
+      }
+    }
+
+    // Find or create account
+    let account;
+    if (accountId) {
+      account = await prisma.account.findFirst({
+        where: { 
+          id: accountId,
+          userId: userId
+        }
+      });
+      
+      if (!account) {
+        throw new Error('Account not found or access denied');
+      }
+    } else {
+      // Use Manual Entry account
+      account = await prisma.account.findFirst({
+        where: { 
+          userId: userId,
+          accountName: 'Manual Entry'
+        }
+      });
+
+      if (!account) {
+        account = await prisma.account.create({
+          data: {
+            userId: userId,
+            plaidAccountId: 'manual_' + userId,
+            plaidAccessToken: 'manual',
+            accountName: 'Manual Entry',
+            accountType: 'manual',
+            accountSubtype: 'manual',
+            balance: 0,
+            availableBalance: 0,
+          }
+        });
+      }
+    }
+
+    // Find or create budget
+    const transactionDate = date ? new Date(date) : new Date();
+    const month = transactionDate.getMonth() + 1;
+    const year = transactionDate.getFullYear();
+
+    let budget = await prisma.budget.findFirst({
+      where: {
+        userId: userId,
+        name: finalCategory,
+        month: month,
+        year: year,
+      }
+    });
+
+    // Auto-create budget if it doesn't exist
+    if (!budget) {
+      if (finalCategory === 'To Be Assigned') {
+        budget = await prisma.budget.create({
+          data: {
+            userId: userId,
+            name: 'To Be Assigned',
+            category: 'Income',
+            amount: 0,
+            spent: 0,
+            month: month,
+            year: year
+          }
+        });
+      } else {
+        budget = await CreditCardAutomation.getOrCreateBudget(
+          userId,
+          finalCategory,
+          month,
+          year,
+          100 // $100 default
+        );
+      }
+    }
+
+    // Create transaction
+    const transaction = await prisma.transaction.create({
+      data: {
+        userId: userId,
+        accountId: account.id,
+        budgetId: budget?.id || null,
+        plaidTransactionId: 'manual_ai_' + Date.now(),
+        amount: parseFloat(amount),
+        description,
+        category: finalCategory,
+        date: transactionDate,
+        cleared: account.accountType === 'manual',
+        isManual: true,
+        approved: true,
+      },
+    });
+
+    // Update budget
+    if (budget && parseFloat(amount) < 0) {
+      await prisma.budget.update({
+        where: { id: budget.id },
+        data: {
+          spent: {
+            increment: Math.abs(parseFloat(amount))
+          }
+        }
+      });
+    } else if (budget && parseFloat(amount) > 0 && finalCategory === 'To Be Assigned') {
+      await prisma.budget.update({
+        where: { id: budget.id },
+        data: {
+          amount: {
+            increment: parseFloat(amount)
+          }
+        }
+      });
+    }
+
+    // Update account balance
+    await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        balance: {
+          increment: parseFloat(amount)
+        }
+      }
+    });
+
+    console.log('✅ Transaction created successfully:', transaction.id);
+    
+    return {
+      success: true,
+      transaction: {
+        id: transaction.id,
+        amount: transaction.amount,
+        description: transaction.description,
+        category: transaction.category,
+        date: transaction.date
+      }
+    };
+  } catch (error) {
+    console.error('❌ Error creating transaction:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create transaction'
+    };
+  }
+}
+
+async function handleRecategorizeTransaction(userId: string, args: any) {
+  try {
+    console.log('🔧 Recategorizing transaction:', args);
+    
+    const { transactionId, category } = args;
+
+    if (!transactionId || !category) {
+      throw new Error('Missing required fields: transactionId, category');
+    }
+
+    // Get the current transaction
+    const currentTransaction = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+      include: { budget: true }
+    });
+
+    if (!currentTransaction || currentTransaction.userId !== userId) {
+      throw new Error('Transaction not found');
+    }
+
+    // Remove amount from old budget if it exists and is an expense
+    if (currentTransaction.budget && currentTransaction.amount < 0) {
+      await prisma.budget.update({
+        where: { id: currentTransaction.budget.id },
+        data: {
+          spent: {
+            decrement: Math.abs(currentTransaction.amount)
+          }
+        }
+      });
+    }
+
+    // Find matching budget for new category
+    const transactionDate = new Date(currentTransaction.date);
+    const month = transactionDate.getMonth() + 1;
+    const year = transactionDate.getFullYear();
+
+    let newBudget = await prisma.budget.findFirst({
+      where: {
+        userId: userId,
+        category: category,
+        month: month,
+        year: year,
+      }
+    });
+
+    // Auto-create budget if it doesn't exist for the category
+    if (!newBudget) {
+      newBudget = await CreditCardAutomation.getOrCreateBudget(
+        userId,
+        category,
+        month,
+        year,
+        100 // Default $100 budget
+      );
+    }
+
+    // Update the transaction
+    const updatedTransaction = await prisma.transaction.update({
+      where: { id: transactionId },
+      data: {
+        category: category,
+        budgetId: newBudget?.id || null,
+      },
+    });
+
+    // Add amount to new budget if it exists and is an expense
+    if (newBudget && currentTransaction.amount < 0) {
+      await prisma.budget.update({
+        where: { id: newBudget.id },
+        data: {
+          spent: {
+            increment: Math.abs(currentTransaction.amount)
+          }
+        }
+      });
+    }
+
+    console.log('✅ Transaction recategorized successfully');
+    
+    return {
+      success: true,
+      transaction: {
+        id: updatedTransaction.id,
+        category: updatedTransaction.category,
+        oldCategory: currentTransaction.category
+      }
+    };
+  } catch (error) {
+    console.error('❌ Error recategorizing transaction:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to recategorize transaction'
     };
   }
 }
