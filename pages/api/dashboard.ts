@@ -94,54 +94,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Calculate what "To Be Assigned" should be based on available cash vs budgeted amounts
-    console.log('💰 Calculating "To Be Assigned" amount...');
-    
-    // Get current month budgets (excluding "To Be Assigned" itself)
-    const otherBudgets = await prisma.budget.findMany({
-      where: {
-        userId: userId,
-        month: currentMonth,
-        year: currentYear,
-        NOT: { name: 'To Be Assigned' }
-      }
-    });
-    
-    const totalAllocatedToBudgets = otherBudgets.reduce((sum, budget) => sum + budget.amount, 0);
-    
-    // Get income transactions for this month (positive amounts in "To Be Assigned" category)
-    const incomeTransactions = await prisma.transaction.findMany({
-      where: {
-        userId: userId,
-        category: 'To Be Assigned',
-        amount: { gt: 0 }, // Only positive amounts (income)
-        date: {
-          gte: new Date(currentYear, currentMonth - 1, 1),
-          lt: new Date(currentYear, currentMonth, 1),
-        }
-      }
-    });
-    
-    const totalIncomeThisMonth = incomeTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-    
-    // Calculate what "To Be Assigned" should be: Total Income - Total Allocated to Other Budgets
-    const shouldBeAvailable = totalIncomeThisMonth - totalAllocatedToBudgets;
-    
-    console.log(`💰 Income this month: $${totalIncomeThisMonth.toFixed(2)}`);
-    console.log(`💰 Allocated to budgets: $${totalAllocatedToBudgets.toFixed(2)}`);
-    console.log(`💰 Should be available: $${shouldBeAvailable.toFixed(2)}`);
+    // The "To Be Assigned" budget amount should now be correctly maintained by transaction imports
+    console.log('💰 "To Be Assigned" budget should be automatically maintained by transaction imports');
     
     if (toBeAssignedRecord) {
-      console.log(`💰 Currently available: $${toBeAssignedRecord.amount.toFixed(2)}`);
-      
-      // Update "To Be Assigned" if it doesn't match what it should be
-      if (Math.abs(toBeAssignedRecord.amount - shouldBeAvailable) > 0.01) { // Use small tolerance for floating point
-        console.log(`🔄 Updating "To Be Assigned" from $${toBeAssignedRecord.amount.toFixed(2)} to $${shouldBeAvailable.toFixed(2)}`);
-        await prisma.budget.update({
-          where: { id: toBeAssignedRecord.id },
-          data: { amount: shouldBeAvailable }
-        });
-      }
+      console.log(`💰 Current "To Be Assigned" amount: $${toBeAssignedRecord.amount.toFixed(2)}`);
     } else {
       console.warn('⚠️ "To Be Assigned" budget record not found - this should not happen');
     }

@@ -10,22 +10,23 @@ const PLAID_BASE_URLS = {
   production: 'https://production.plaid.com'
 };
 
-// Simple categorization function
+// Improved categorization function with proper income handling
 function categorizeTransaction(transactionName: string, categories: string[], amount: number): string {
   const name = transactionName.toLowerCase();
   const category = categories[0]?.toLowerCase() || '';
   
-  // Check for income transactions (positive amounts for regular accounts)
-  if (amount > 0) {
-    // Income-related terms
-    if (name.includes('salary') || name.includes('payroll') || name.includes('paycheck') ||
-        name.includes('direct deposit') || name.includes('deposit') || name.includes('income') ||
-        name.includes('interest earned') || category.includes('payroll') || category.includes('deposit')) {
-      return 'To Be Assigned';
-    }
+  // Handle transfers first (these shouldn't be counted as income)
+  if (category.includes('transfer') || name.includes('payment to') || name.includes('payment from') || 
+      name.includes('transfer') || name.includes('ach transfer')) {
+    return 'Transfer';
   }
   
-  // Simple categorization logic for expenses
+  // ALL positive amounts should be treated as income unless they're clearly transfers
+  if (amount > 0) {
+    return 'To Be Assigned';
+  }
+  
+  // Categorization logic for expenses (negative amounts)
   if (name.includes('starbucks') || name.includes('dunkin') || category.includes('restaurant')) {
     return 'Food & Dining';
   }
@@ -34,9 +35,6 @@ function categorizeTransaction(transactionName: string, categories: string[], am
   }
   if (name.includes('walmart') || name.includes('target') || name.includes('grocery') || category.includes('shop')) {
     return 'Groceries';
-  }
-  if (category.includes('transfer') || name.includes('payment')) {
-    return 'Transfer';
   }
   
   return 'Needs a Category';
@@ -187,22 +185,95 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const category = categorizeTransaction(transaction.name, transaction.category || [], amount);
 
           try {
+            // Find or create budget for this category
+            const transactionDate = new Date(transaction.date);
+            const month = transactionDate.getMonth() + 1;
+            const year = transactionDate.getFullYear();
+
+            let budget = await prisma.budget.findFirst({
+              where: {
+                userId: userId,
+                name: category,
+                month: month,
+                year: year,
+              }
+            });
+
+            // Auto-create budget if it doesn't exist
+            if (!budget) {
+              if (category === 'To Be Assigned') {
+                budget = await prisma.budget.create({
+                  data: {
+                    userId: userId,
+                    name: 'To Be Assigned',
+                    category: 'Income',
+                    amount: 0,
+                    spent: 0,
+                    month: month,
+                    year: year
+                  }
+                });
+                console.log(`📊 Created "To Be Assigned" budget for ${month}/${year}`);
+              } else {
+                budget = await prisma.budget.create({
+                  data: {
+                    userId: userId,
+                    name: category,
+                    category: category === 'Transfer' ? 'Transfer' : 'Needs a Category',
+                    amount: 0,
+                    spent: 0,
+                    month: month,
+                    year: year
+                  }
+                });
+                console.log(`📊 Created budget: ${category} for ${month}/${year}`);
+              }
+            }
+
+            // Create transaction with budget link
             await prisma.transaction.create({
               data: {
                 userId: userId,
                 accountId: account.id,
+                budgetId: budget.id,
                 plaidTransactionId: transaction.transaction_id,
                 amount: amount,
                 description: transaction.name,
                 category: category,
                 subcategory: (transaction.category && transaction.category[0]) || '',
-                date: new Date(transaction.date),
+                date: transactionDate,
                 cleared: true,
                 approved: false,
                 isManual: false,
               },
             });
-            console.log(`✅ Created transaction: ${transaction.name} - $${amount}`);
+
+            // Update budget based on transaction type
+            if (category === 'To Be Assigned' && amount > 0) {
+              // Income: increase the budget amount
+              await prisma.budget.update({
+                where: { id: budget.id },
+                data: {
+                  amount: {
+                    increment: amount
+                  }
+                }
+              });
+              console.log(`💰 Added $${amount} to "To Be Assigned" budget`);
+            } else if (category !== 'Transfer' && amount < 0) {
+              // Expense: increase the spent amount
+              await prisma.budget.update({
+                where: { id: budget.id },
+                data: {
+                  spent: {
+                    increment: Math.abs(amount)
+                  }
+                }
+              });
+              console.log(`💸 Added $${Math.abs(amount)} to ${category} spent`);
+            }
+
+            console.log(`✅ Created transaction: ${transaction.name} - $${amount} → ${category}`);
           } catch (error) {
             console.error(`❌ Failed to create transaction ${transaction.name}:`, error);
           }
