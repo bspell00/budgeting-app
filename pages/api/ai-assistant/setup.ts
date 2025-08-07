@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, AIAssistant } from '@prisma/client';
 import { createOrGetAssistant, createThread } from '../../../lib/assistant';
 
 const prisma = new PrismaClient();
@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`🤖 Setting up AI Assistant for user ${userId}`);
 
     // Check if user already has an assistant
-    let existingAssistant = await prisma.aIAssistant.findUnique({
+    let existingAssistant = await (prisma as any).aIAssistant.findUnique({
       where: { userId }
     });
 
@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Save to database
     const aiAssistant = existingAssistant 
-      ? await prisma.aIAssistant.update({
+      ? await (prisma as any).aIAssistant.update({
           where: { userId },
           data: {
             assistantId,
@@ -64,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             updatedAt: new Date()
           }
         })
-      : await prisma.aIAssistant.create({
+      : await (prisma as any).aIAssistant.create({
           data: {
             userId,
             assistantId,
