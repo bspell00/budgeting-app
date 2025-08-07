@@ -35,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       ? { userId }
       : { userId, embedding: null };
 
-    const transactions = await prisma.transaction.findMany({
+    const transactions = await (prisma as any).transaction.findMany({
       where: whereClause,
       select: {
         id: true,
@@ -57,7 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`📊 Processing ${transactions.length} transactions for embeddings`);
 
     // Extract descriptions for batch processing
-    const descriptions = transactions.map(t => t.description);
+    const descriptions = transactions.map((t: any) => t.description);
     
     // Generate embeddings in batches
     const embeddings = await batchGenerateEmbeddings(descriptions);
@@ -70,7 +70,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const embedding = embeddings[i];
       if (embedding) {
         updatePromises.push(
-          prisma.transaction.update({
+          (prisma as any).transaction.update({
             where: { id: transactions[i].id },
             data: {
               embedding: JSON.stringify(embedding),
