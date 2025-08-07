@@ -52,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (queryEmbedding) {
           // Get all transactions with embeddings for this user
-          const transactionsWithEmbeddings = await prisma.transaction.findMany({
+          const transactionsWithEmbeddings = await (prisma as any).transaction.findMany({
             where: { 
               userId,
               embedding: { not: null }
@@ -82,7 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (transactionsWithEmbeddings.length > 0) {
             // Parse embeddings and perform similarity search
             const parsedEmbeddings = transactionsWithEmbeddings
-              .map(t => {
+              .map((t: any) => {
                 try {
                   return {
                     id: t.id,
@@ -167,7 +167,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Get statistics about embeddings
-    const embeddingStats = await prisma.transaction.aggregate({
+    const embeddingStats = await (prisma as any).transaction.aggregate({
       where: { userId },
       _count: {
         id: true,
