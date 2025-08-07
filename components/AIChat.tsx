@@ -163,18 +163,36 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
     scrollToBottom();
   }, [messages]);
 
+  // Reset typing state on mount to prevent stuck state
+  useEffect(() => {
+    console.log('🔄 AIChat mounted, resetting isTyping to false');
+    setIsTyping(false);
+  }, []);
+
   const handleSendMessage = async () => {
     console.log('🎯 handleSendMessage called with input:', inputMessage);
+    console.log('🎯 Current isTyping state:', isTyping);
     
     if (!inputMessage.trim()) {
       console.log('❌ Empty message, skipping send');
       return;
     }
 
+    if (isTyping) {
+      console.log('⏳ Already typing, ignoring send request');
+      return;
+    }
+
     const messageText = inputMessage;
     setInputMessage('');
     setIsTyping(true);
-    console.log('📤 About to send message:', messageText);
+    console.log('📤 About to send message:', messageText, 'isTyping set to true');
+
+    // Failsafe timeout - reset isTyping after 30 seconds maximum
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ Timeout reached - forcing isTyping to false');
+      setIsTyping(false);
+    }, 30000);
 
     try {
       // Use optimistic update for sending message
@@ -185,9 +203,11 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
       console.log('✅ sendMessageOptimistic completed successfully');
     } catch (error) {
       console.error('AI Chat Error:', error);
+      console.error('📝 Setting isTyping to false due to error');
     } finally {
+      clearTimeout(timeoutId);
       setIsTyping(false);
-      console.log('🏁 handleSendMessage completed');
+      console.log('🏁 handleSendMessage completed, isTyping set to false');
     }
   };
 
@@ -499,6 +519,9 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                     </div>
+                    <div className="text-xs text-gray-500 mt-2">
+                      Finley is thinking...
+                    </div>
                   </div>
                 </div>
               )}
@@ -519,8 +542,16 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
                       console.log('⌨️ Key pressed:', e.key);
                       handleKeyPress(e);
                     }}
+                    onFocus={() => {
+                      console.log('👆 Textarea focused, isTyping:', isTyping);
+                    }}
+                    onClick={() => {
+                      console.log('🖱️ Textarea clicked, isTyping:', isTyping);
+                    }}
                     placeholder="Ask me anything about your finances..."
-                    className="w-full resize-none border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-last-lettuce focus:border-transparent max-h-32"
+                    className={`w-full resize-none border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-last-lettuce focus:border-transparent max-h-32 ${
+                      isTyping ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                    }`}
                     rows={2}
                     disabled={isTyping}
                   />
@@ -535,6 +566,19 @@ export default function AIChat({ onExecuteAction, isOpen: externalIsOpen, onOpen
                 >
                   <Send className="w-5 h-5" />
                 </button>
+                {/* Debug reset button */}
+                {isTyping && (
+                  <button
+                    onClick={() => {
+                      console.log('🔄 Manual reset clicked!');
+                      setIsTyping(false);
+                    }}
+                    className="bg-red-500 text-white p-2 rounded-lg text-xs"
+                    title="Reset stuck typing state (debug)"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
             </div>
           </div>
