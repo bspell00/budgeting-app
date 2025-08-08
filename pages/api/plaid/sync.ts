@@ -34,20 +34,56 @@ const plaidClient = new PlaidApi(
 // Helpers
 function calcAmount(plaidAmount: number, accountType?: string) {
   // Credit: purchases are negative (outflow), payments positive (inflow)
-  return accountType === 'credit'
-    ? plaidAmount > 0
-      ? -plaidAmount
-      : Math.abs(plaidAmount)
-    : -plaidAmount; // depository: Plaid + = deposit, we store + as inflow? flip for consistency used elsewhere
+  if (accountType === 'credit') {
+    // For credit cards: positive Plaid amount = money spent (negative in our system)
+    // negative Plaid amount = payment made (positive in our system)
+    return plaidAmount > 0 ? -plaidAmount : Math.abs(plaidAmount);
+  } else {
+    // For depository: negative Plaid amount = money spent (negative in our system)
+    // positive Plaid amount = money received (positive in our system)
+    return -plaidAmount;
+  }
+}
+
+function safeDecryptToken(token: string): string | null {
+  if (!token) return null;
+  
+  // Check if token is already decrypted (starts with access-)
+  if (token.startsWith('access-')) {
+    return token;
+  }
+  
+  // Try to decrypt
+  try {
+    const decrypted = decryptPlaidToken(token);
+    if (decrypted && decrypted.startsWith('access-')) {
+      return decrypted;
+    }
+  } catch (error) {
+    console.warn('[plaid/sync] Token decryption failed:', error.message);
+  }
+  
+  // Fallback to raw token
+  console.warn('[plaid/sync] Using raw token as fallback');
+  return token;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.user) return res.status(401).json({ error: 'Unauthorized' });
-  const userId = (session.user as any).id;
-  if (!userId) return res.status(401).json({ error: 'No user ID found' });
+  // Handle webhook calls (bypass auth for internal calls)
+  let userId: string;
+  const webhookUserId = req.body?.webhookUserId;
+  if (webhookUserId && req.headers['user-agent']?.includes('plaid-webhook-sync')) {
+    userId = webhookUserId;
+    console.log(`[plaid/sync] Processing webhook sync for user ${userId}`);
+  } else {
+    // Normal authenticated call
+    const session = await getServerSession(req, res, authOptions);
+    if (!session?.user) return res.status(401).json({ error: 'Unauthorized' });
+    userId = (session.user as any).id;
+    if (!userId) return res.status(401).json({ error: 'No user ID found' });
+  }
 
   let broadcastQueued = false;
   let totalNewTransactions = 0;
@@ -79,11 +115,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Use the (decrypted) access token from any account under this item
       const first = item.accounts.find(a => a.plaidAccessToken);
-      if (!first?.plaidAccessToken) continue;
+      if (!first?.plaidAccessToken) {
+        console.warn(`[plaid/sync] No access token found for item ${item.id}`);
+        continue;
+      }
 
-      const decrypted = decryptPlaidToken(first.plaidAccessToken) ?? first.plaidAccessToken;
-      if (!decrypted) continue;
-      const accessToken = decrypted;
+      const accessToken = safeDecryptToken(first.plaidAccessToken);
+      if (!accessToken) {
+        console.error(`[plaid/sync] Failed to decrypt token for item ${item.id}`);
+        continue;
+      }
 
       // Map plaidAccountId → local account
       const byPlaidId = new Map(
@@ -111,20 +152,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.warn('[plaid/sync] accountsGet failed (continuing)', e);
       }
 
-      // 2) Incremental transactions sync (cursor lives on the PlaidItem)
+      // 2) Transactions sync - handle both initial and incremental
       let cursor = item.cursor || null;
       const added: any[] = [];
+      const modified: any[] = [];
+      const removed: any[] = [];
       let hasMore = true;
+      let requestCount = 0;
+      const maxRequests = 10; // Prevent infinite loops
 
-      while (hasMore) {
-        const resp = await plaidClient.transactionsSync({
-          access_token: accessToken,
-          cursor: cursor || undefined,
-          count: 250,
-        });
-        added.push(...resp.data.added);
-        hasMore = resp.data.has_more;
-        cursor = resp.data.next_cursor;
+      // If no cursor, this is first sync - get recent transactions
+      if (!cursor) {
+        console.log(`[plaid/sync] First sync for item ${item.id}, fetching recent transactions`);
+      }
+
+      while (hasMore && requestCount < maxRequests) {
+        try {
+          const resp = await plaidClient.transactionsSync({
+            access_token: accessToken,
+            cursor: cursor || undefined,
+            count: 250,
+          });
+          
+          added.push(...resp.data.added);
+          modified.push(...resp.data.modified);
+          removed.push(...resp.data.removed);
+          
+          hasMore = resp.data.has_more;
+          cursor = resp.data.next_cursor;
+          requestCount++;
+          
+          console.log(`[plaid/sync] Batch ${requestCount}: +${resp.data.added.length} ~${resp.data.modified.length} -${resp.data.removed.length}`);
+        } catch (error) {
+          console.error(`[plaid/sync] transactionsSync failed for item ${item.id}:`, error);
+          break;
+        }
       }
 
       // Save cursor
@@ -133,19 +195,94 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           where: { id: item.id },
           data: { cursor },
         });
+        console.log(`[plaid/sync] Updated cursor for item ${item.id}`);
       }
 
-      // 3) Insert NEW transactions, routed to the correct account
+      // 3) Handle removed transactions
+      for (const removedTx of removed) {
+        try {
+          const existing = await prisma.transaction.findUnique({
+            where: { plaidTransactionId: removedTx.transaction_id },
+            select: { id: true, budgetId: true, amount: true },
+          });
+          
+          if (existing) {
+            // Reverse budget impact before deletion
+            if (existing.budgetId && existing.amount < 0) {
+              await prisma.budget.update({
+                where: { id: existing.budgetId },
+                data: { spent: { decrement: Math.abs(existing.amount) } },
+              });
+            }
+            
+            await prisma.transaction.delete({
+              where: { id: existing.id },
+            });
+            console.log(`[plaid/sync] Removed transaction ${removedTx.transaction_id}`);
+            broadcastQueued = true;
+          }
+        } catch (error) {
+          console.warn(`[plaid/sync] Failed to remove transaction ${removedTx.transaction_id}:`, error);
+        }
+      }
+
+      // 4) Handle modified transactions
+      for (const modifiedTx of modified) {
+        try {
+          const local = byPlaidId.get(modifiedTx.account_id);
+          if (!local) continue;
+
+          const existing = await prisma.transaction.findUnique({
+            where: { plaidTransactionId: modifiedTx.transaction_id },
+            include: { budget: true },
+          });
+
+          if (existing) {
+            const newAmount = calcAmount(modifiedTx.amount, local.accountType);
+            const amountDiff = newAmount - existing.amount;
+
+            await prisma.transaction.update({
+              where: { id: existing.id },
+              data: {
+                amount: newAmount,
+                description: modifiedTx.name,
+                date: new Date(modifiedTx.date),
+              },
+            });
+
+            // Update budget spent amount if changed
+            if (existing.budget && amountDiff !== 0 && newAmount < 0) {
+              await prisma.budget.update({
+                where: { id: existing.budget.id },
+                data: { spent: { increment: Math.abs(amountDiff) } },
+              });
+            }
+            
+            console.log(`[plaid/sync] Modified transaction ${modifiedTx.transaction_id}`);
+            broadcastQueued = true;
+          }
+        } catch (error) {
+          console.warn(`[plaid/sync] Failed to update transaction ${modifiedTx.transaction_id}:`, error);
+        }
+      }
+
+      // 5) Insert NEW transactions, routed to the correct account
       for (const t of added) {
         const local = byPlaidId.get(t.account_id);
-        if (!local) continue;
+        if (!local) {
+          console.warn(`[plaid/sync] No local account found for Plaid account ${t.account_id}`);
+          continue;
+        }
 
         // De-dupe by Plaid ID
         const exists = await prisma.transaction.findUnique({
           where: { plaidTransactionId: t.transaction_id },
           select: { id: true },
         });
-        if (exists) continue;
+        if (exists) {
+          console.log(`[plaid/sync] Transaction ${t.transaction_id} already exists, skipping`);
+          continue;
+        }
 
         const amountFinal = calcAmount(t.amount, local.accountType);
         const tDate = new Date(t.date);
@@ -191,6 +328,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         await prisma.$transaction(async (trx) => {
           if (unclearedManual) {
+            console.log(`[plaid/sync] Matching manual transaction found for ${t.transaction_id}`);
             await trx.transaction.update({
               where: { id: unclearedManual.id },
               data: {
@@ -223,7 +361,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
 
           // Create transaction
-          await trx.transaction.create({
+          const newTransaction = await trx.transaction.create({
             data: {
               userId,
               accountId: local.id,
@@ -239,6 +377,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               approved: false,
             },
           });
+          
+          console.log(`[plaid/sync] Created transaction: ${t.name} (${amountFinal}) -> ${local.accountName}`);
 
           // Update budget totals
           if (budget) {
