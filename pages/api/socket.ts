@@ -6,8 +6,13 @@ import { initWebSocket } from '../../lib/websocket-server';
 export const config = { api: { bodyParser: false } };
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
-  const server = res.socket?.server as unknown as HTTPServer;
-  if (!server) return res.status(500).end('No server');
+  // Next's types don't declare `server` on the socket, but it's there at runtime.
+  const server: HTTPServer | undefined = (res as any)?.socket?.server;
+  if (!server) {
+    console.error('[ws] No HTTP server on res.socket.server');
+    return res.status(500).end('No server');
+  }
+
   initWebSocket(server);
-  res.end();
+  res.end(); // 200 OK, empty body
 }
