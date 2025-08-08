@@ -52,7 +52,7 @@ model Account {
   plaidCursor      String?
   accountName      String
   accountType      String
-  accountSubtype   String
+  accountSubtype   String?
   balance          Float    @default(0)
   availableBalance Float?
   createdAt        DateTime @default(now())
