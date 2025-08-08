@@ -42,9 +42,11 @@ export class SecureAccountService {
 
     if (!account) return null;
 
-    // Decrypt the Plaid access token
-    const decryptedToken = decryptPlaidToken(account.plaidAccessToken);
-    
+    // Handle possible null value for plaidAccessToken
+    const decryptedToken = account.plaidAccessToken
+      ? decryptPlaidToken(account.plaidAccessToken)
+      : null;
+
     return {
       ...account,
       plaidAccessToken: decryptedToken,
