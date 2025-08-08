@@ -1,303 +1,245 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
-import { PlaidApi, Configuration, PlaidEnvironments, TransactionsGetRequest, AccountsGetRequest } from 'plaid';
-import CreditCardAutomation from '../../../lib/credit-card-automation';
-import { SecureAccountService, SecurityAuditService, SecureTransactionService } from '../../../lib/secure-data';
+import { PlaidApi, Configuration, PlaidEnvironments } from 'plaid';
 import prisma from '../../../lib/prisma';
+import CreditCardAutomation from '../../../lib/credit-card-automation';
 
-const configuration = new Configuration({
-  basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments],
+let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
+if (typeof window === 'undefined') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const websocketServer = require('../../../lib/websocket-server');
+    triggerFinancialSync = websocketServer.triggerFinancialSync;
+  } catch {}
+}
+
+const plaidClient = new PlaidApi(new Configuration({
+  basePath: PlaidEnvironments[(process.env.PLAID_ENV as any) || 'sandbox'],
   baseOptions: {
     headers: {
-      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
-      'PLAID-SECRET': process.env.PLAID_SECRET,
+      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID || '',
+      'PLAID-SECRET': process.env.PLAID_SECRET || '',
+      'Plaid-Version': '2020-09-14',
     },
   },
-});
+}));
 
-const plaidClient = new PlaidApi(configuration);
+function calcAmount(plaidAmount: number, accountType?: string) {
+  return accountType === 'credit'
+    ? (plaidAmount > 0 ? -plaidAmount : Math.abs(plaidAmount))
+    : -plaidAmount;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const session = await getServerSession(req, res, authOptions);
-  if (!session?.user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+  if (!session?.user) return res.status(401).json({ error: 'Unauthorized' });
   const userId = (session.user as any).id;
-  if (!userId) {
-    return res.status(401).json({ error: 'No user ID found' });
-  }
+
+  let broadcastQueued = false;
+  let totalNewTransactions = 0;
+  let totalUpdatedAccounts = 0;
 
   try {
-    // Log sync operation for security audit
-    await SecurityAuditService.logSecurityEvent({
-      userId,
-      action: 'SYNC_ACCOUNTS',
-      resource: 'plaid_data',
-      success: true,
-      details: 'User initiated account sync',
-    });
-
-    // Get all user accounts (tokens remain encrypted)
-    const accounts = await prisma.account.findMany({
-      where: {
-        userId: userId,
+    // Pull all Plaid items for this user, with their accounts
+    const items = await prisma.plaidItem.findMany({
+      where: { userId },
+      include: {
+        accounts: {
+          select: {
+            id: true,
+            plaidAccessToken: true,
+            plaidAccountId: true,
+            accountType: true,
+          },
+        },
       },
     });
+    if (!items.length) return res.status(404).json({ error: 'No connected items found' });
 
-    if (accounts.length === 0) {
-      return res.status(404).json({ error: 'No connected accounts found' });
-    }
+    // Process each ITEM once (single cursor per item)
+    for (const item of items) {
+      if (!item.accounts.length) continue;
+      const accessToken = item.accounts[0].plaidAccessToken;
+      if (!accessToken) continue;
 
-    let totalNewTransactions = 0;
-    let totalUpdatedAccounts = 0;
+      // Map plaidAccountId -> local account
+      const byPlaidId = new Map(item.accounts.map(a => [a.plaidAccountId, a]));
 
-    // Sync each account
-    for (const account of accounts) {
-      try {
-        // Update account balances
-        const accountsRequest: AccountsGetRequest = {
-          access_token: account.plaidAccessToken,
-        };
-        const accountsResponse = await plaidClient.accountsGet(accountsRequest);
-        const plaidAccount = accountsResponse.data.accounts.find(
-          acc => acc.account_id === account.plaidAccountId
+      // 1) Update balances for accounts under this item
+      const accountsResp = await plaidClient.accountsGet({ access_token: accessToken });
+      for (const pAcc of accountsResp.data.accounts) {
+        const local = byPlaidId.get(pAcc.account_id);
+        if (!local) continue;
+        await prisma.account.update({
+          where: { id: local.id },
+          data: {
+            balance: pAcc.balances.current || 0,
+            availableBalance: pAcc.balances.available ?? null,
+          },
+        });
+        totalUpdatedAccounts++;
+      }
+
+      // 2) transactions/sync loop for this item
+      let cursor = item.cursor || null;
+      const added: any[] = [];
+      let hasMore = true;
+
+      while (hasMore) {
+        const resp = await plaidClient.transactionsSync({
+          access_token: accessToken,
+          cursor: cursor || undefined,
+          count: 250,
+        });
+        added.push(...resp.data.added);
+        hasMore = resp.data.has_more;
+        cursor = resp.data.next_cursor;
+      }
+
+      // Save new cursor back to the item
+      await prisma.plaidItem.update({ where: { id: item.id }, data: { cursor } });
+
+      // 3) Insert NEW transactions, routed to the correct local account
+      for (const t of added) {
+        const local = byPlaidId.get(t.account_id);
+        if (!local) continue;
+
+        // De-dupe by Plaid ID
+        const exists = await prisma.transaction.findUnique({
+          where: { plaidTransactionId: t.transaction_id },
+          select: { id: true },
+        });
+        if (exists) continue;
+
+        // Match potential manual transaction (±5%, ±3 days)
+        const amountFinal = calcAmount(t.amount, local.accountType);
+        const tDate = new Date(t.date);
+        const matchStart = new Date(tDate.getTime() - 3 * 24 * 60 * 60 * 1000);
+        const matchEnd   = new Date(tDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+        const unclearedManual = await prisma.transaction.findFirst({
+          where: {
+            userId,
+            accountId: local.id,
+            isManual: true,
+            cleared: false,
+            date: { gte: matchStart, lte: matchEnd },
+            amount: { gte: amountFinal * 0.95, lte: amountFinal * 1.05 },
+          },
+          select: { id: true },
+        });
+
+        // Categorize
+        let category = CreditCardAutomation.categorizeTransaction(
+          t.name,
+          t.category || [],
+          t.personal_finance_category?.detailed || t.personal_finance_category?.primary,
+          amountFinal
         );
-
-        if (plaidAccount) {
-          await prisma.account.update({
-            where: { id: account.id },
-            data: {
-              balance: plaidAccount.balances.current || 0,
-              availableBalance: plaidAccount.balances.available,
-            },
-          });
-          totalUpdatedAccounts++;
+        if (local.accountType === 'credit') {
+          if (t.amount < 0) category = 'Credit Card Payments';
+          else if (
+            t.category?.includes('Interest') ||
+            t.category?.includes('Fee') ||
+            t.name.toLowerCase().includes('interest') ||
+            t.name.toLowerCase().includes('fee')
+          ) category = 'Interest & Fees';
         }
 
-        // Get transactions from the last 30 days
-        const now = new Date();
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        
-        const transactionsRequest: TransactionsGetRequest = {
-          access_token: account.plaidAccessToken,
-          start_date: thirtyDaysAgo.toISOString().split('T')[0],
-          end_date: now.toISOString().split('T')[0],
-        };
-        const transactionsResponse = await plaidClient.transactionsGet(transactionsRequest);
+        const txMonth = tDate.getMonth() + 1;
+        const txYear  = tDate.getFullYear();
 
-        // Process new transactions
-        for (const transaction of transactionsResponse.data.transactions) {
-          // Check if transaction already exists
-          const existingTransaction = await prisma.transaction.findUnique({
-            where: {
-              plaidTransactionId: transaction.transaction_id,
-            },
-          });
-
-          if (!existingTransaction) {
-            // Calculate expected amount for matching (applying same logic as transaction creation)
-            let expectedAmount;
-            if (plaidAccount?.type === 'credit') {
-              // Credit card logic: apply same transformation as main amount calculation
-              if (transaction.amount > 0) {
-                // Purchase: positive Plaid amount becomes negative (outflow)
-                expectedAmount = -transaction.amount;
-              } else {
-                // Payment: negative Plaid amount becomes positive (inflow)
-                expectedAmount = Math.abs(transaction.amount);
-              }
-            } else {
-              // Regular account logic: flip sign
-              expectedAmount = -transaction.amount;
-            }
-
-            // Check for matching uncleared manual transaction
-            const unclearedManualTransaction = await prisma.transaction.findFirst({
-              where: {
-                userId: userId,
-                accountId: account.id,
-                isManual: true,
-                cleared: false,
-                date: {
-                  gte: new Date(new Date(transaction.date).getTime() - 3 * 24 * 60 * 60 * 1000), // 3 days before
-                  lte: new Date(new Date(transaction.date).getTime() + 3 * 24 * 60 * 60 * 1000), // 3 days after
-                },
-                amount: {
-                  gte: expectedAmount * 0.95, // 5% tolerance
-                  lte: expectedAmount * 1.05,
-                },
-              },
-            });
-
-            if (unclearedManualTransaction) {
-              // Match found - update the manual transaction to be cleared and link to Plaid transaction
-              await prisma.transaction.update({
-                where: { id: unclearedManualTransaction.id },
-                data: {
-                  cleared: true,
-                  plaidTransactionId: transaction.transaction_id,
-                  amount: expectedAmount, // Use the correctly calculated amount
-                  description: transaction.name, // Use Plaid's description
-                  date: new Date(transaction.date), // Use Plaid's date
-                },
-              });
-              continue; // Skip creating a new transaction
-            }
-            // DEBUG: Log transaction details
-            console.log('🔍 Processing Plaid sync transaction:', {
-              name: transaction.name,
-              plaidAmount: transaction.amount,
-              accountType: plaidAccount?.type,
-              isCredit: plaidAccount?.type === 'credit',
-              category: transaction.category
-            });
-            
-            // Calculate amount based on account type
-            let amount;
-            if (plaidAccount?.type === 'credit') {
-              // Credit card logic:
-              // - Plaid positive amounts = purchases = negative outflows (increase debt)
-              // - Plaid negative amounts = payments = positive inflows (reduce debt)
-              if (transaction.amount > 0) {
-                // Purchase: positive Plaid amount becomes negative (outflow)
-                amount = -transaction.amount;
-              } else {
-                // Payment: negative Plaid amount becomes positive (inflow)
-                amount = Math.abs(transaction.amount);
-              }
-            } else {
-              // Regular account logic:
-              // - Plaid positive amounts = deposits = positive inflows
-              // - Plaid negative amounts = spending = negative outflows
-              amount = -transaction.amount; // Flip sign for regular accounts (Plaid convention)
-            }
-            
-            // Enhanced smart categorization using Plaid data (now that amount is calculated)
-            console.log('Transaction categorization debug:', {
-              name: transaction.name,
-              category: transaction.category,
-              personal_finance_category: transaction.personal_finance_category
-            });
-            
-            let category = CreditCardAutomation.categorizeTransaction(
-              transaction.name,
-              transaction.category || [],
-              transaction.personal_finance_category?.detailed || transaction.personal_finance_category?.primary,
-              amount // Pass calculated amount for income detection
-            );
-            
-            // Override with credit card specific logic if applicable
-            if (plaidAccount?.type === 'credit') {
-              // Credit card payments (negative Plaid amounts become positive after flip = payments)
-              if (transaction.amount < 0) {
-                category = 'Credit Card Payments';
-              }
-              // Interest and fees (positive Plaid amounts that are fees/interest become negative after flip)
-              else if (transaction.category?.includes('Interest') || 
-                       transaction.category?.includes('Fee') ||
-                       transaction.name.toLowerCase().includes('interest') ||
-                       transaction.name.toLowerCase().includes('fee')) {
-                category = 'Interest & Fees';
-              }
-            }
-            
-            console.log('🔍 Calculated sync amount:', {
-              originalPlaidAmount: transaction.amount,
-              calculatedAmount: amount,
-              accountType: plaidAccount?.type,
-              finalCategory: category
-            });
-            
-            // Find matching budget for automatic linking
-            let budget = await prisma.budget.findFirst({
-              where: {
-                userId: userId,
-                name: category, // Match by budget name, not category group
-                month: new Date(transaction.date).getMonth() + 1,
-                year: new Date(transaction.date).getFullYear(),
-              },
-            });
-            
-            // Create "To Be Assigned" budget if it doesn't exist
-            if (!budget && category === 'To Be Assigned') {
-              budget = await prisma.budget.create({
-                data: {
-                  userId: userId,
-                  name: 'To Be Assigned',
-                  category: 'Income',
-                  amount: 0,
-                  spent: 0,
-                  month: new Date(transaction.date).getMonth() + 1,
-                  year: new Date(transaction.date).getFullYear()
-                }
-              });
-            }
-            
-            await prisma.transaction.create({
+        await prisma.$transaction(async (trx) => {
+          if (unclearedManual) {
+            await trx.transaction.update({
+              where: { id: unclearedManual.id },
               data: {
-                userId: userId,
-                accountId: account.id,
-                budgetId: budget?.id || null,
-                plaidTransactionId: transaction.transaction_id,
-                amount: amount,
-                description: transaction.name,
-                category: category,
-                subcategory: transaction.category?.[1] || null,
-                date: new Date(transaction.date),
-                cleared: true, // Plaid transactions are always cleared
-                isManual: false, // Plaid transactions are not manual
-                approved: false, // Imported transactions require approval
+                cleared: true,
+                plaidTransactionId: t.transaction_id,
+                amount: amountFinal,
+                description: t.name,
+                date: tDate,
               },
             });
-            
-            // Update budget amounts based on transaction type
-            if (budget) {
-              if (amount < 0) {
-                // Expense: increment spent amount
-                await prisma.budget.update({
-                  where: { id: budget.id },
-                  data: {
-                    spent: {
-                      increment: Math.abs(amount)
-                    }
-                  }
-                });
-              } else if (amount > 0 && category === 'To Be Assigned') {
-                // Income: increment budget amount (available to assign)
-                await prisma.budget.update({
-                  where: { id: budget.id },
-                  data: {
-                    amount: {
-                      increment: amount
-                    }
-                  }
-                });
-              }
-            }
-            
-            totalNewTransactions++;
+            return;
           }
-        }
-      } catch (accountError) {
-        console.error(`Error syncing account ${account.id}:`, accountError);
-        // Continue with other accounts even if one fails
+
+          // Find/create budget bucket
+          let budget = await trx.budget.findFirst({
+            where: { userId, name: category, month: txMonth, year: txYear },
+          });
+          if (!budget && category === 'To Be Assigned') {
+            budget = await trx.budget.create({
+              data: {
+                userId,
+                name: 'To Be Assigned',
+                category: 'Income',
+                amount: 0,
+                spent: 0,
+                month: txMonth,
+                year: txYear,
+              },
+            });
+          }
+
+          // Create transaction
+          await trx.transaction.create({
+            data: {
+              userId,
+              accountId: local.id,
+              budgetId: budget?.id || null,
+              plaidTransactionId: t.transaction_id,
+              amount: amountFinal,
+              description: t.name,
+              category,
+              subcategory: t.category?.[1] || null,
+              date: tDate,
+              cleared: true,
+              isManual: false,
+              approved: false,
+            },
+          });
+
+          // Update budget totals
+          if (budget) {
+            if (amountFinal < 0) {
+              await trx.budget.update({
+                where: { id: budget.id },
+                data: { spent: { increment: Math.abs(amountFinal) } },
+              });
+            } else if (amountFinal > 0 && category === 'To Be Assigned') {
+              await trx.budget.update({
+                where: { id: budget.id },
+                data: { amount: { increment: amountFinal } },
+              });
+            }
+          }
+        });
+
+        totalNewTransactions++;
+        broadcastQueued = true;
       }
     }
 
-    res.json({ 
-      success: true, 
+    if (broadcastQueued && triggerFinancialSync) {
+      await triggerFinancialSync(userId);
+    }
+
+    return res.json({
+      success: true,
       newTransactions: totalNewTransactions,
       updatedAccounts: totalUpdatedAccounts,
-      message: `Synced ${totalNewTransactions} new transactions and updated ${totalUpdatedAccounts} accounts`
+      message: `Synced ${totalNewTransactions} new transactions and updated ${totalUpdatedAccounts} accounts`,
     });
   } catch (error) {
     console.error('Error syncing accounts:', error);
-    res.status(500).json({ error: 'Failed to sync accounts' });
+    return res.status(500).json({ error: 'Failed to sync accounts' });
+  } finally {
+    if (broadcastQueued && triggerFinancialSync) {
+      try { await triggerFinancialSync(userId); } catch {}
+    }
   }
 }

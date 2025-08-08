@@ -1,291 +1,92 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../../lib/auth';
-import { PayeeService } from '../../../lib/payee-service';
+import { PlaidApi, Configuration, PlaidEnvironments } from 'plaid';
 import prisma from '../../../lib/prisma';
 
-const PLAID_BASE_URLS = {
-  sandbox: 'https://sandbox.plaid.com',
-  development: 'https://development.plaid.com',
-  production: 'https://production.plaid.com'
-};
-
-// Improved categorization function with proper income handling
-function categorizeTransaction(transactionName: string, categories: string[], amount: number): string {
-  const name = transactionName.toLowerCase();
-  const category = categories[0]?.toLowerCase() || '';
-  
-  // Handle transfers first (these shouldn't be counted as income)
-  if (category.includes('transfer') || name.includes('payment to') || name.includes('payment from') || 
-      name.includes('transfer') || name.includes('ach transfer')) {
-    return 'Transfer';
-  }
-  
-  // ALL positive amounts should be treated as income unless they're clearly transfers
-  if (amount > 0) {
-    return 'To Be Assigned';
-  }
-  
-  // Categorization logic for expenses (negative amounts)
-  if (name.includes('starbucks') || name.includes('dunkin') || category.includes('restaurant')) {
-    return 'Food & Dining';
-  }
-  if (name.includes('gas') || name.includes('shell') || name.includes('exxon') || category.includes('gas')) {
-    return 'Transportation';
-  }
-  if (name.includes('walmart') || name.includes('target') || name.includes('grocery') || category.includes('shop')) {
-    return 'Groceries';
-  }
-  
-  return 'Needs a Category';
+// optional realtime emit
+let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
+if (typeof window === 'undefined') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const websocketServer = require('../../../lib/websocket-server');
+    triggerFinancialSync = websocketServer.triggerFinancialSync;
+  } catch {}
 }
 
+const plaid = new PlaidApi(new Configuration({
+  basePath: PlaidEnvironments[(process.env.PLAID_ENV as any) || 'sandbox'],
+  baseOptions: {
+    headers: {
+      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID || '',
+      'PLAID-SECRET': process.env.PLAID_SECRET || '',
+      'Plaid-Version': '2020-09-14',
+    },
+  },
+}));
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const session = await getServerSession(req, res, authOptions);
-  if (!session?.user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+  if (!session?.user) return res.status(401).json({ error: 'Unauthorized' });
   const userId = (session.user as any).id;
-  if (!userId) {
-    return res.status(401).json({ error: 'No user ID found' });
-  }
-
-  const { public_token } = req.body;
 
   try {
-    const plaidEnv = process.env.PLAID_ENV || 'sandbox';
-    const baseUrl = PLAID_BASE_URLS[plaidEnv as keyof typeof PLAID_BASE_URLS];
+    const { public_token, institution } = req.body || {};
+    if (!public_token) return res.status(400).json({ error: 'Missing public_token' });
 
-    console.log('🔄 Starting minimal token exchange for user:', userId);
-
-    // Exchange public token for access token
-    const exchangeResponse = await fetch(`${baseUrl}/item/public_token/exchange`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
-        'PLAID-SECRET': process.env.PLAID_SECRET!,
-      },
-      body: JSON.stringify({
-        public_token,
-      }),
-    });
-
-    if (!exchangeResponse.ok) {
-      const errorData = await exchangeResponse.text();
-      console.error('❌ Plaid exchange error:', errorData);
-      throw new Error(`Failed to exchange token: ${exchangeResponse.status}`);
+    // 1) Exchange public_token → access token + item id
+    const tokenRes = await plaid.itemPublicTokenExchange({ public_token });
+    const accessToken = tokenRes.data.access_token;
+    const itemId = tokenRes.data.item_id;
+    if (!accessToken || !itemId) {
+      return res.status(502).json({ error: 'Plaid exchange returned empty values' });
     }
 
-    const exchangeData = await exchangeResponse.json();
-    const accessToken = exchangeData.access_token;
-    console.log('✅ Access token obtained');
-
-    // Get account information
-    const accountsResponse = await fetch(`${baseUrl}/accounts/get`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
-        'PLAID-SECRET': process.env.PLAID_SECRET!,
-      },
-      body: JSON.stringify({
-        access_token: accessToken,
-      }),
+    // 2) Upsert the PlaidItem (per ITEM cursor lives here)
+    const item = await prisma.plaidItem.upsert({
+      where: { itemId },
+      update: { userId, institution },
+      create: { itemId, userId, institution },
+      select: { id: true },
     });
 
-    if (!accountsResponse.ok) {
-      const errorData = await accountsResponse.text();
-      console.error('❌ Plaid accounts error:', errorData);
-      throw new Error(`Failed to get accounts: ${accountsResponse.status}`);
+    // 3) Fetch accounts for this item and upsert/link them
+    const accountsRes = await plaid.accountsGet({ access_token: accessToken });
+    for (const acc of accountsRes.data.accounts) {
+      await prisma.account.upsert({
+        where: { plaidAccountId: acc.account_id },
+        update: {
+          userId,
+          plaidAccessToken: accessToken,
+          plaidItemId: item.id, // link account → item
+          accountName: acc.name || acc.official_name || acc.mask || 'Account',
+          accountType: acc.type,
+          accountSubtype: acc.subtype || null,
+          balance: acc.balances.current ?? 0,
+          availableBalance: acc.balances.available ?? null,
+        },
+        create: {
+          userId,
+          plaidAccountId: acc.account_id,
+          plaidAccessToken: accessToken,
+          plaidItemId: item.id,
+          accountName: acc.name || acc.official_name || acc.mask || 'Account',
+          accountType: acc.type,
+          accountSubtype: acc.subtype || null,
+          balance: acc.balances.current ?? 0,
+          availableBalance: acc.balances.available ?? null,
+        },
+      });
     }
 
-    const accountsData = await accountsResponse.json();
-    console.log(`✅ Retrieved ${accountsData.accounts.length} accounts`);
+    // 4) Optional realtime ping
+    if (triggerFinancialSync) await triggerFinancialSync(userId);
 
-    // Store accounts in database
-    const accounts = await Promise.all(
-      accountsData.accounts.map(async (account: any) => {
-        console.log(`📝 Creating account: ${account.name} (${account.type})`);
-        
-        return await prisma.account.create({
-          data: {
-            userId: userId,
-            plaidAccountId: account.account_id,
-            plaidAccessToken: accessToken, // Store directly for now
-            accountName: account.name,
-            accountType: account.type,
-            accountSubtype: account.subtype || '',
-            balance: account.balances.current || 0,
-            availableBalance: account.balances.available,
-          },
-        });
-      })
-    );
-
-    console.log(`✅ Created ${accounts.length} accounts in database`);
-
-    // Create credit card payment payees for YNAB-style functionality
-    console.log('💳 Creating credit card payment payees...');
-    await PayeeService.createCreditCardPaymentPayees(userId);
-    console.log('✅ Credit card payment payees created');
-
-    // Import transactions
-    console.log('📊 Importing transactions...');
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    const transactionsResponse = await fetch(`${baseUrl}/transactions/get`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
-        'PLAID-SECRET': process.env.PLAID_SECRET!,
-      },
-      body: JSON.stringify({
-        access_token: accessToken,
-        start_date: thirtyDaysAgo.toISOString().split('T')[0],
-        end_date: now.toISOString().split('T')[0],
-      }),
-    });
-
-    if (transactionsResponse.ok) {
-      const transactionsData = await transactionsResponse.json();
-      console.log(`📊 Processing ${transactionsData.transactions.length} transactions`);
-
-      // Import transactions
-      await Promise.all(
-        transactionsData.transactions.map(async (transaction: any) => {
-          const account = accounts.find(acc => acc.plaidAccountId === transaction.account_id);
-          if (!account) return;
-
-          const isCredit = account.accountType === 'credit';
-          let amount = transaction.amount;
-
-          // Fix amount signs for credit cards
-          if (isCredit) {
-            // Credit card transactions:
-            // - Plaid positive amounts = purchases → should be negative outflows
-            // - Plaid negative amounts = payments → should be positive inflows
-            if (transaction.amount > 0) {
-              // Purchase: positive Plaid amount becomes negative (outflow)
-              amount = -transaction.amount;
-            } else {
-              // Payment: negative Plaid amount becomes positive (inflow)
-              amount = Math.abs(transaction.amount);
-            }
-          }
-
-          // Categorize transaction
-          const category = categorizeTransaction(transaction.name, transaction.category || [], amount);
-
-          try {
-            // Find or create budget for this category
-            const transactionDate = new Date(transaction.date);
-            const month = transactionDate.getMonth() + 1;
-            const year = transactionDate.getFullYear();
-
-            let budget = await prisma.budget.findFirst({
-              where: {
-                userId: userId,
-                name: category,
-                month: month,
-                year: year,
-              }
-            });
-
-            // Auto-create budget if it doesn't exist
-            if (!budget) {
-              if (category === 'To Be Assigned') {
-                budget = await prisma.budget.create({
-                  data: {
-                    userId: userId,
-                    name: 'To Be Assigned',
-                    category: 'Income',
-                    amount: 0,
-                    spent: 0,
-                    month: month,
-                    year: year
-                  }
-                });
-                console.log(`📊 Created "To Be Assigned" budget for ${month}/${year}`);
-              } else {
-                budget = await prisma.budget.create({
-                  data: {
-                    userId: userId,
-                    name: category,
-                    category: category === 'Transfer' ? 'Transfer' : 'Needs a Category',
-                    amount: 0,
-                    spent: 0,
-                    month: month,
-                    year: year
-                  }
-                });
-                console.log(`📊 Created budget: ${category} for ${month}/${year}`);
-              }
-            }
-
-            // Create transaction with budget link
-            await prisma.transaction.create({
-              data: {
-                userId: userId,
-                accountId: account.id,
-                budgetId: budget.id,
-                plaidTransactionId: transaction.transaction_id,
-                amount: amount,
-                description: transaction.name,
-                category: category,
-                subcategory: (transaction.category && transaction.category[0]) || '',
-                date: transactionDate,
-                cleared: true,
-                approved: false,
-                isManual: false,
-              },
-            });
-
-            // Update budget based on transaction type (but NOT for "To Be Assigned")
-            if (category === 'To Be Assigned') {
-              // Income transactions are tracked but "To Be Assigned" amount is calculated from account balances
-              console.log(`💰 Income transaction: $${amount} → "To Be Assigned" (amount calculated from account balances)`);
-            } else if (category !== 'Transfer' && amount < 0) {
-              // Expense: increase the spent amount
-              await prisma.budget.update({
-                where: { id: budget.id },
-                data: {
-                  spent: {
-                    increment: Math.abs(amount)
-                  }
-                }
-              });
-              console.log(`💸 Added $${Math.abs(amount)} to ${category} spent`);
-            }
-
-            console.log(`✅ Created transaction: ${transaction.name} - $${amount} → ${category}`);
-          } catch (error) {
-            console.error(`❌ Failed to create transaction ${transaction.name}:`, error);
-          }
-        })
-      );
-      
-      console.log('✅ Transactions imported successfully');
-    }
-
-    res.json({ 
-      success: true, 
-      accounts: accounts.length,
-      message: 'Accounts connected successfully'
-    });
-
-  } catch (error) {
-    console.error('❌ Exchange token error:', error);
-    res.status(500).json({ 
-      error: 'Failed to exchange token',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return res.json({ ok: true, itemId, accountCount: accountsRes.data.accounts.length });
+  } catch (err: any) {
+    console.error('exchange-token error', err?.response?.data || err);
+    return res.status(500).json({ error: 'Failed to exchange token' });
   }
 }

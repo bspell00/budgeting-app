@@ -1,4 +1,5 @@
 import useSWR, { mutate } from 'swr';
+import { useEffect } from 'react';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
@@ -12,10 +13,37 @@ export function useTransactions(accountId?: string) {
   });
   
   const { data, error, isLoading } = useSWR(key, fetcher, {
-    refreshInterval: 1000, // 1 second for local development
+    refreshInterval: 0, // Disabled polling - use WebSocket events instead
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
   });
+
+  // Listen for WebSocket real-time sync events
+  useEffect(() => {
+    const handleRealtimeSync = (event: any) => {
+      try {
+        console.log('🔄 Transactions: Received realtime-sync event, refreshing...');
+        const detail = event.detail || {};
+        console.log('🔄 Event detail:', detail);
+        mutate(key);
+        mutate('/api/transactions'); // Refresh both specific and general endpoints
+      } catch (error) {
+        console.error('❌ Error handling realtime-sync in Transactions:', error);
+        // Still try to refresh on error
+        mutate(key);
+        mutate('/api/transactions');
+      }
+    };
+
+    window.addEventListener('realtime-sync', handleRealtimeSync);
+    return () => {
+      try {
+        window.removeEventListener('realtime-sync', handleRealtimeSync);
+      } catch (error) {
+        console.warn('⚠️ Error removing realtime-sync listener:', error);
+      }
+    };
+  }, [key]);
 
   console.log('🔍 useTransactions LOCAL SWR result:', {
     key,

@@ -1,0 +1,306 @@
+--- a/lib/websocket-server.ts
++++ b/lib/websocket-server.ts
+@@
+-import { Server as IOServer } from 'socket.io';
+-import type { Server as HTTPServer } from 'http';
+-
+-let io: IOServer | null = null;
+-
+-export function initWebSocket(server: HTTPServer) {
+-  if (io) return io;
+-  io = new IOServer(server, {
+-    cors: {
+-      origin: [
+-        'http://localhost:3000',
+-        'http://localhost:3001',
+-      ],
+-      methods: ['GET', 'POST'],
+-      credentials: true,
+-    },
+-  });
+-
+-  io.on('connection', (socket) => {
+-    socket.on('join-user-room', (userId: string) => {
+-      if (userId) socket.join(`user:${userId}`);
+-    });
+-    socket.on('disconnect', () => {});
+-  });
+-  return io;
+-}
+-
+-export async function triggerFinancialSync(userId: string) {
+-  if (!io || !userId) return;
+-  io.to(`user:${userId}`).emit('calculation-sync', { ts: Date.now() });
+-}
++// Minimal Socket.IO server with per-user rooms and explicit CORS
++import { Server as IOServer } from 'socket.io';
++import type { Server as HTTPServer } from 'http';
++
++let io: IOServer | null = null;
++
++export function initWebSocket(server: HTTPServer) {
++  if (io) return io;
++  io = new IOServer(server, {
++    cors: {
++      origin: [
++        'http://localhost:3000',
++        'http://localhost:3001',
++        'https://budgeting-app-staging-29118750c1e6.herokuapp.com',
++        'https://budgeting-app-production-161abe3ba542.herokuapp.com',
++      ],
++      methods: ['GET', 'POST'],
++      credentials: true,
++    },
++  });
++
++  io.on('connection', (socket) => {
++    socket.on('join-user-room', (userId: string) => {
++      if (userId) socket.join(`user:${userId}`);
++    });
++    socket.on('disconnect', () => {});
++  });
++  return io;
++}
++
++export async function triggerFinancialSync(userId: string) {
++  if (!io || !userId) return;
++  io.to(`user:${userId}`).emit('calculation-sync', { ts: Date.now() });
++}
+--- /dev/null
++++ b/pages/api/plaid/webhook.ts
+@@ -0,0 +1,119 @@
++import type { NextApiRequest, NextApiResponse } from 'next';
++import { buffer } from 'micro';
++import prisma from '../../../lib/prisma';
++import { plaidClient } from '../../../lib/plaid';
++
++// Broadcast after server-side sync
++let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
++if (typeof window === 'undefined') {
++  try {
++    // eslint-disable-next-line @typescript-eslint/no-var-requires
++    const websocketServer = require('../../../lib/websocket-server');
++    triggerFinancialSync = websocketServer.triggerFinancialSync;
++  } catch (e) {
++    console.log('WebSocket server not available', e);
++  }
++}
++
++export const config = { api: { bodyParser: false } };
++
++export default async function handler(req: NextApiRequest, res: NextApiResponse) {
++  if (req.method !== 'POST') return res.status(405).end();
++
++  let evt: any = {};
++  try {
++    const raw = (await buffer(req)).toString();
++    evt = JSON.parse(raw);
++  } catch {
++    // Acknowledge to avoid Plaid retry storms
++    return res.status(200).json({ ok: true });
++  }
++
++  const itemId = evt?.item_id;
++  if (!itemId) return res.status(200).json({ ok: true });
++
++  try {
++    const mapping = await prisma.plaidItem.findUnique({ where: { itemId } });
++    if (!mapping?.userId) return res.status(200).json({ ok: true });
++    const userId = mapping.userId;
++
++    const type = evt?.webhook_type;
++    const code = evt?.webhook_code;
++
++    // If you want immediate delta pulls, call your existing sync route here:
++    // await fetch(`${process.env.NEXTAUTH_URL}/api/plaid/sync`, {
++    //   method: 'POST',
++    //   headers: { 'content-type': 'application/json' },
++    //   body: JSON.stringify({ userId }),
++    // });
++
++    // Regardless, nudge clients (dashboard etc.) to refetch or recalc
++    if (triggerFinancialSync) await triggerFinancialSync(userId);
++
++    return res.status(200).json({ ok: true });
++  } catch (e) {
++    console.error('Plaid webhook handler error', e);
++    return res.status(200).json({ ok: true });
++  }
++}
+--- a/pages/api/plaid/sync.ts
++++ b/pages/api/plaid/sync.ts
+@@
+ import type { NextApiRequest, NextApiResponse } from 'next';
+ import { getServerSession } from 'next-auth';
+ import { authOptions } from '../auth/[...nextauth]';
+ import prisma from '../../../lib/prisma';
+ import { plaidClient } from '../../../lib/plaid';
+ 
++let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
++if (typeof window === 'undefined') {
++  try {
++    // eslint-disable-next-line @typescript-eslint/no-var-requires
++    const websocketServer = require('../../../lib/websocket-server');
++    triggerFinancialSync = websocketServer.triggerFinancialSync;
++  } catch (e) {
++    console.log('WebSocket server not available during build');
++  }
++}
++
+ export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+   if (req.method !== 'POST') return res.status(405).end();
+   const session = await getServerSession(req, res, authOptions);
+   if (!session?.user?.id) return res.status(401).json({ error: 'Unauthorized' });
+   const userId = session.user.id as string;
+ 
+   try {
+@@
+-    // ... your existing sync logic with plaid /transactions/sync and DB upserts ...
+-    // return res.status(200).json({ ok: true });
++    // ... your existing sync logic with plaid /transactions/sync and DB upserts ...
++    // Ensure all writes are committed before broadcasting:
++    if (triggerFinancialSync) await triggerFinancialSync(userId);
++    return res.status(200).json({ ok: true });
+   } catch (e: any) {
+     console.error('plaid sync error', e?.response?.data || e);
+     return res.status(500).json({ error: 'Plaid sync failed' });
+   }
+ }
+--- a/pages/_app.tsx
++++ b/pages/_app.tsx
+@@
+ import '@/styles/globals.css';
+ import type { AppProps } from 'next/app';
+ import { SessionProvider } from 'next-auth/react';
++import { useWebSocket } from '../hooks/useWebSocket';
+ 
+ export default function App({ Component, pageProps: { session, ...pageProps } }: AppProps) {
++  useWebSocket();
+   return (
+     <SessionProvider session={session}>
+       <Component {...pageProps} />
+     </SessionProvider>
+   );
+ }
+--- /dev/null
++++ b/hooks/useWebSocket.ts
+@@ -0,0 +1,54 @@
++import { useEffect, useRef } from 'react';
++import { io, Socket } from 'socket.io-client';
++import { useSession } from 'next-auth/react';
++
++export function useWebSocket() {
++  const { data: session } = useSession();
++  const ref = useRef<Socket | null>(null);
++
++  useEffect(() => {
++    if (!session?.user?.id) return;
++    if (ref.current) return;
++
++    const socket = io('', { path: '/api/socket', transports: ['websocket', 'polling'] });
++    ref.current = socket;
++
++    socket.on('connect', () => {
++      socket.emit('join-user-room', session.user.id);
++    });
++
++    socket.on('calculation-sync', () => {
++      // Option A: kick a global event your SWR hooks listen for:
++      // window.dispatchEvent(new CustomEvent('realtime-sync'));
++      // Option B: directly call mutate() in specific hooks/components.
++    });
++
++    return () => {
++      socket?.disconnect();
++      ref.current = null;
++    };
++  }, [session?.user?.id]);
++}
+--- /dev/null
++++ b/pages/api/socket.ts
+@@ -0,0 +1,23 @@
++import type { NextApiRequest } from 'next';
++import type { NextApiResponseServerIO } from '../../types/next';
++import { initWebSocket } from '../../lib/websocket-server';
++
++export const config = { api: { bodyParser: false } };
++
++export default function handler(req: NextApiRequest, res: NextApiResponseServerIO) {
++  if (!res.socket?.server?.io) {
++    initWebSocket(res.socket.server as any);
++  }
++  res.end();
++}
+--- /dev/null
++++ b/lib/plaid.ts
+@@ -0,0 +1,22 @@
++import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
++
++const config = new Configuration({
++  basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
++  baseOptions: {
++    headers: {
++      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID || '',
++      'PLAID-SECRET': process.env.PLAID_SECRET || '',
++      'Plaid-Version': '2020-09-14',
++    },
++  },
++});
++
++export const plaidClient = new PlaidApi(config);
+--- /dev/null
++++ b/README-REALTIME-PLAID.md
+@@ -0,0 +1,76 @@
++# Realtime + Plaid Webhooks (Server-Driven) Patch
++
++## What this adds
++- Stores Plaid `item_id` mapped to your `User` (`PlaidItem` table)
++- Webhook handler at `/api/plaid/webhook` to receive Plaid pushes
++- Broadcasts `calculation-sync` over Socket.IO after server-side sync
++- Adds your Heroku domains to Socket.IO CORS
++- Initializes the socket globally in `_app.tsx`
++
++## Apply
++1) Merge these files into your repo.
++2) Add the `PlaidItem` model (see `prisma/schema.patch.prisma`) to your `prisma/schema.prisma`.
++3) Migrate:
++   ```bash
++   npx prisma generate
++   npx prisma migrate dev --name add_plaid_item
++   # prod:
++   # npx prisma migrate deploy
++   ```
++4) In the Plaid dashboard, set webhook URLs:
++   - `https://budgeting-app-staging-29118750c1e6.herokuapp.com/api/plaid/webhook`
++   - `https://budgeting-app-production-161abe3ba542.herokuapp.com/api/plaid/webhook`
++5) Ensure env vars on both Heroku apps:
++   - `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV`
++   - `NEXTAUTH_URL` = exact origin, no trailing slash
++
++## Notes
++- In `/api/plaid/webhook.ts` you can call your existing `/api/plaid/sync` to fetch deltas immediately on each event (recommended).
++- Keep broadcasting **after** DB writes using `triggerFinancialSync(userId)`.
++- If you move to serverless, consider Ably/Pusher/Supabase Realtime or host Socket.IO on a persistent dyno.
+--- /dev/null
++++ b/prisma/schema.patch.prisma
+@@ -0,0 +1,23 @@
++// --- PATCH: Add PlaidItem mapping and helpful indexes ---
++// Copy this model block into your existing prisma/schema.prisma (within the model section).
++
++model PlaidItem {
++  id           String   @id @default(cuid())
++  itemId       String   @unique
++  userId       String
++  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
++  institution  String?  // optional: store display name from Plaid link metadata
++  createdAt    DateTime @default(now())
++  updatedAt    DateTime @updatedAt
++
++  @@index([userId])
++}
+--- a/hooks/useDashboard-websocket.ts
++++ b/hooks/useDashboard-websocket.ts
+@@
+-  }, { refreshInterval: 30000 });
++  }, { refreshInterval: 0 });
+

@@ -6,6 +6,17 @@ import { FinancialCalculator } from '../../lib/financial-calculator';
 import CreditCardAutomation from '../../lib/credit-card-automation';
 import prisma from '../../lib/prisma';
 
+// WebSocket trigger for real-time updates
+let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
+if (typeof window === 'undefined') {
+  try {
+    const websocketServer = require('../../lib/websocket-server');
+    triggerFinancialSync = websocketServer.triggerFinancialSync;
+  } catch (e) {
+    console.log('WebSocket server not available');
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user) {
@@ -128,7 +139,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         approved: true, // Manual transactions are automatically approved
       });
 
-      console.log(`✅ Transaction created with WebSocket sync: ${description} - $${amount}`);
+      console.log(`✅ Transaction created with financial sync: ${description} - $${amount}`);
+      
+      // Trigger WebSocket update for real-time sync
+      if (triggerFinancialSync) {
+        try {
+          await triggerFinancialSync(userId);
+          console.log('✅ WebSocket sync triggered after transaction creation');
+        } catch (error) {
+          console.error('⚠️ WebSocket sync failed:', error);
+        }
+      }
+      
       res.status(201).json(transaction);
     } catch (error) {
       console.error('Error creating transaction:', error);
@@ -230,6 +252,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           console.log('✅ Financial sync completed after transaction update');
         } catch (error) {
           console.error('⚠️ Financial sync failed after transaction update:', error);
+        }
+      }
+
+      // Trigger WebSocket update for real-time sync
+      if (triggerFinancialSync) {
+        try {
+          await triggerFinancialSync(userId);
+          console.log('✅ WebSocket sync triggered after transaction update');
+        } catch (error) {
+          console.error('⚠️ WebSocket sync failed:', error);
         }
       }
 
@@ -367,6 +399,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           console.log('✅ Financial sync completed after transaction deletion');
         } catch (error) {
           console.error('⚠️ Financial sync failed after transaction deletion:', error);
+        }
+      }
+
+      // Trigger WebSocket update for real-time sync
+      if (triggerFinancialSync) {
+        try {
+          await triggerFinancialSync(userId);
+          console.log('✅ WebSocket sync triggered after transaction deletion');
+        } catch (error) {
+          console.error('⚠️ WebSocket sync failed:', error);
         }
       }
       

@@ -1,41 +1,79 @@
 import useSWR, { mutate } from 'swr';
+import { useEffect } from 'react';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export const useDashboard = () => {
   const { data, error, isLoading } = useSWR('/api/dashboard', fetcher, {
-    refreshInterval: 1000, // 1 second for local development testing
+    refreshInterval: 0, // Disabled polling - use WebSocket events instead
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
   });
+
+  // Listen for WebSocket real-time sync events
+  useEffect(() => {
+    const handleRealtimeSync = (event: any) => {
+      try {
+        console.log('🔄 Dashboard: Received realtime-sync event, refreshing...');
+        const detail = event.detail || {};
+        console.log('🔄 Event detail:', detail);
+        mutate('/api/dashboard');
+      } catch (error) {
+        console.error('❌ Error handling realtime-sync in Dashboard:', error);
+        // Still try to refresh on error
+        mutate('/api/dashboard');
+      }
+    };
+
+    // Use a more specific event listener to avoid conflicts
+    window.addEventListener('realtime-sync', handleRealtimeSync);
+    return () => {
+      try {
+        window.removeEventListener('realtime-sync', handleRealtimeSync);
+      } catch (error) {
+        console.warn('⚠️ Error removing realtime-sync listener:', error);
+      }
+    };
+  }, []);
 
   // Simple refresh function for local development
   const refresh = () => {
     mutate('/api/dashboard');
   };
 
-  // Optimistic budget update with immediate server refresh
+  // Budget update with actual API call
   const updateBudgetOptimistic = async (budgetId: string, updates: any) => {
-    console.log('💰 Local: Optimistic budget update:', budgetId, updates);
+    console.log('💰 Local: Budget update API call:', budgetId, updates);
     
-    // Optimistic update to local cache
-    mutate('/api/dashboard', (currentData: any) => {
-      if (!currentData?.categories) return currentData;
-      
-      const updatedCategories = currentData.categories.map((category: any) => ({
-        ...category,
-        budgets: category.budgets.map((budget: any) => 
-          budget.id === budgetId ? { ...budget, ...updates } : budget
-        )
-      }));
-      
-      return { ...currentData, categories: updatedCategories };
-    }, false);
-    
-    // Immediate server refresh for local development
-    setTimeout(() => {
+    try {
+      // Make actual API call to update the budget
+      const response = await fetch('/api/budgets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: budgetId,
+          ...updates
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Budget update failed: ${response.statusText}`);
+      }
+
+      const updatedBudget = await response.json();
+      console.log('✅ Budget updated successfully:', updatedBudget);
+
+      // Refresh dashboard data after successful update
       mutate('/api/dashboard');
-    }, 100);
+      
+      return updatedBudget;
+    } catch (error) {
+      console.error('❌ Budget update failed:', error);
+      
+      // Still refresh dashboard in case of error to get current state
+      mutate('/api/dashboard');
+      throw error;
+    }
   };
 
   // Transaction category update with immediate refresh

@@ -14,34 +14,54 @@ model User {
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  accounts       Account[]
-  budgets        Budget[]
-  transactions   Transaction[]
-  goals          Goal[]
+
+  accounts        Account[]
+  budgets         Budget[]
+  transactions    Transaction[]
+  goals           Goal[]
   budgetTransfers BudgetTransfer[]
-  payees         Payee[]
-  aiPlans        AIPlan[]
-  chatMessages   ChatMessage[]
-  aiAssistants   AIAssistant[]
+  payees          Payee[]
+  aiPlans         AIPlan[]
+  chatMessages    ChatMessage[]
+  aiAssistants    AIAssistant[]
+
+  // NEW: back-reference for Plaid items
+  plaidItems PlaidItem[] @relation("UserPlaidItems")
+}
+
+model PlaidItem {
+  id          String   @id @default(cuid())
+  itemId      String   @unique
+  userId      String
+  user        User     @relation("UserPlaidItems", fields: [userId], references: [id], onDelete: Cascade)
+  institution String?
+  cursor      String?            // ← added
+
+  accounts    Account[]          // backref
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Account {
-  id                String   @id @default(cuid())
-  userId            String
-  plaidAccountId    String   @unique
-  plaidAccessToken  String
-  accountName       String
-  accountType       String
-  accountSubtype    String
-  balance           Float    @default(0)
-  availableBalance  Float?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+   id               String   @id @default(cuid())
+  userId           String
+  plaidAccessToken String?
+  plaidAccountId   String?  @unique
+  plaidItemId      String?       // <— NEW: link to PlaidItem
+  plaidItem        PlaidItem? @relation(fields: [plaidItemId], references: [id])
+  plaidCursor      String?
+  accountName      String
+  accountType      String
+  accountSubtype   String
+  balance          Float    @default(0)
+  availableBalance Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
 
+  @@unique([userId, plaidAccountId])
   @@index([userId])
 }
 
@@ -57,41 +77,42 @@ model Budget {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user                     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions             Transaction[]
-  budgetTransfersFrom      BudgetTransfer[] @relation("FromBudget")
-  budgetTransfersTo        BudgetTransfer[] @relation("ToBudget")
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions        Transaction[]
+  budgetTransfersFrom BudgetTransfer[] @relation("FromBudget")
+  budgetTransfersTo   BudgetTransfer[] @relation("ToBudget")
 
   @@unique([userId, name, month, year])
   @@index([userId])
 }
 
 model Transaction {
-  id                  String    @id @default(cuid())
-  userId              String
-  accountId           String
-  budgetId            String?
-  payeeId             String?
-  plaidTransactionId  String?   @unique
-  amount              Float
-  description         String
-  category            String
-  subcategory         String?
-  date                DateTime
-  cleared             Boolean   @default(false)
-  approved            Boolean   @default(false)
-  isManual            Boolean   @default(false)
-  flagColor           String?
-  embedding           String?   // JSON array of float values for vector search
-  embeddingCreatedAt  DateTime? // Track when embedding was generated
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  userId             String
+  accountId          String
+  budgetId           String?
+  payeeId            String?
+  plaidTransactionId String?   @unique
+  amount             Float
+  description        String
+  category           String
+  subcategory        String?
+  date               DateTime
+  cleared            Boolean   @default(false)
+  approved           Boolean   @default(false)
+  isManual           Boolean   @default(false)
+  flagColor          String?
+  embedding          String? // JSON array of float values for vector search
+  embeddingCreatedAt DateTime? // Track when embedding was generated
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account       Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  budget        Budget?         @relation(fields: [budgetId], references: [id])
-  payee         Payee?          @relation(fields: [payeeId], references: [id])
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  budget  Budget? @relation(fields: [budgetId], references: [id])
+  payee   Payee?  @relation(fields: [payeeId], references: [id])
 
+  @@unique([userId, plaidTransactionId])
   @@index([userId])
   @@index([accountId])
   @@index([budgetId])
@@ -117,30 +138,30 @@ model Goal {
 }
 
 model BudgetTransfer {
-  id              String   @id @default(cuid())
-  userId          String
-  fromBudgetId    String
-  toBudgetId      String
-  amount          Float
-  reason          String
-  transactionId   String?
-  createdAt       DateTime @default(now())
+  id            String   @id @default(cuid())
+  userId        String
+  fromBudgetId  String
+  toBudgetId    String
+  amount        Float
+  reason        String
+  transactionId String?
+  createdAt     DateTime @default(now())
 
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fromBudget  Budget       @relation("FromBudget", fields: [fromBudgetId], references: [id], onDelete: Cascade)
-  toBudget    Budget       @relation("ToBudget", fields: [toBudgetId], references: [id], onDelete: Cascade)
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromBudget Budget @relation("FromBudget", fields: [fromBudgetId], references: [id], onDelete: Cascade)
+  toBudget   Budget @relation("ToBudget", fields: [toBudgetId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model Payee {
-  id          String   @id @default(cuid())
-  userId      String
-  name        String
-  category    String?
-  isInternal  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  category   String?
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
@@ -150,21 +171,21 @@ model Payee {
 }
 
 model AIPlan {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  description String
-  goals       String   @default("Financial improvement")
-  steps       String
-  priority    String   @default("medium")
-  status      String   @default("pending")
-  category    String?
-  metadata    String?
-  timeframe   String?
+  id              String   @id @default(cuid())
+  userId          String
+  title           String
+  description     String
+  goals           String   @default("Financial improvement")
+  steps           String
+  priority        String   @default("medium")
+  status          String   @default("pending")
+  category        String?
+  metadata        String?
+  timeframe       String?
   estimatedImpact String?
-  aiGenerated Boolean @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  aiGenerated     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -174,10 +195,10 @@ model AIPlan {
 model ChatMessage {
   id        String   @id @default(cuid())
   userId    String
-  type      String   // 'user' or 'ai'
+  type      String // 'user' or 'ai'
   content   String
-  metadata  String?  // JSON for function calls, actions, etc.
-  sessionId String?  // Optional session grouping
+  metadata  String? // JSON for function calls, actions, etc.
+  sessionId String? // Optional session grouping
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -188,17 +209,19 @@ model ChatMessage {
 }
 
 model AIAssistant {
-  id           String   @id @default(cuid())
-  userId       String   @unique // One assistant per user
-  assistantId  String   // OpenAI Assistant ID
-  threadId     String?  // Current conversation thread
-  name         String   @default("Finley")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  userId      String   @unique // One assistant per user
+  assistantId String // OpenAI Assistant ID
+  threadId    String? // Current conversation thread
+  name        String   @default("Finley")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([assistantId])
 }
+
+

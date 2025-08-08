@@ -1,38 +1,38 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
 const { execSync } = require('child_process');
 
-const isProduction = process.env.NODE_ENV === 'production' || 
-                     process.env.DATABASE_URL?.includes('postgresql://') ||
-                     process.env.DATABASE_URL?.includes('postgres://');
+const dbUrl = process.env.DATABASE_URL || '';
+const isPostgres =
+  dbUrl.startsWith('postgresql://') || dbUrl.startsWith('postgres://');
+const env = process.env.NODE_ENV || 'development';
 
-console.log('🔧 Setting up database schema...');
-console.log(`📍 Environment: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+console.log('🔧 Setting up Prisma…');
+console.log(`📍 NODE_ENV: ${env}`);
+console.log(`🗄️  DATABASE_URL: ${isPostgres ? 'PostgreSQL' : dbUrl ? 'SQLite/Other' : 'UNSET'}`);
 
-const SCHEMA_PATH = path.join(__dirname, '../prisma/schema.prisma');
-const PRODUCTION_SCHEMA_PATH = path.join(__dirname, '../prisma/schema.production.prisma');
+// Always use the single canonical schema
+const schemaPath = 'prisma/schema.prisma';
 
 try {
-  let schemaToUse = SCHEMA_PATH;
-  
-  if (isProduction) {
-    // Use production schema for Heroku
-    if (fs.existsSync(PRODUCTION_SCHEMA_PATH)) {
-      schemaToUse = PRODUCTION_SCHEMA_PATH;
-      console.log('✅ Using PostgreSQL schema for production');
-    } else {
-      console.log('⚠️  Production schema not found, using default');
-    }
+  // Generate client from the canonical schema
+  console.log('🔄 Generating Prisma client…');
+  execSync(`npx prisma generate --schema="${schemaPath}"`, { stdio: 'inherit' });
+
+  // Optionally run migrations when not in production CI containers, etc.
+  // Only run if DATABASE_URL is set (prevents noise during build steps that don’t have env wired)
+  if (isPostgres && env !== 'production') {
+    // Safe for dev; if you prefer, change to `prisma migrate deploy`
+    console.log('🧭 Applying dev migrations…');
+    execSync(`npx prisma migrate dev --schema="${schemaPath}" --name "auto_dev_sync"`, {
+      stdio: 'inherit',
+    });
   } else {
-    console.log('✅ Using SQLite schema for development');
+    console.log('ℹ️ Skipping migrate (either production or non-Postgres DB).');
   }
 
-  console.log('🔄 Generating Prisma client...');
-  execSync(`npx prisma generate --schema="${schemaToUse}"`, { stdio: 'inherit' });
-  console.log('✅ Schema setup complete!');
-} catch (error) {
-  console.error('❌ Error setting up schema:', error.message);
+  console.log('✅ Prisma setup complete!');
+} catch (err) {
+  console.error('❌ Prisma setup failed:', err?.message || err);
   process.exit(1);
 }

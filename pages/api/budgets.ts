@@ -5,6 +5,17 @@ import { FinancialCalculator } from '../../lib/financial-calculator';
 import CreditCardAutomation from '../../lib/credit-card-automation';
 import prisma from '../../lib/prisma';
 
+// WebSocket trigger for real-time updates
+let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
+if (typeof window === 'undefined') {
+  try {
+    const websocketServer = require('../../lib/websocket-server');
+    triggerFinancialSync = websocketServer.triggerFinancialSync;
+  } catch (e) {
+    console.log('WebSocket server not available');
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user) {
@@ -65,6 +76,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('✅ Financial sync completed after budget creation');
       } catch (error) {
         console.error('⚠️ Financial sync failed after budget creation:', error);
+      }
+
+      // Trigger WebSocket update for real-time sync
+      if (triggerFinancialSync) {
+        try {
+          await triggerFinancialSync(userId);
+          console.log('✅ WebSocket sync triggered after budget creation');
+        } catch (error) {
+          console.error('⚠️ WebSocket sync failed:', error);
+        }
       }
 
       res.status(201).json(budget);
@@ -163,6 +184,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
+      // Trigger WebSocket update for real-time sync
+      if (triggerFinancialSync) {
+        try {
+          await triggerFinancialSync(userId);
+          console.log('✅ WebSocket sync triggered after budget update');
+        } catch (error) {
+          console.error('⚠️ WebSocket sync failed:', error);
+        }
+      }
+
       res.json(updatedBudget);
     } catch (error) {
       console.error('Error updating budget:', error);
@@ -199,6 +230,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.log('✅ Financial sync completed after budget deletion');
       } catch (error) {
         console.error('⚠️ Financial sync failed after budget deletion:', error);
+      }
+
+      // Trigger WebSocket update for real-time sync
+      if (triggerFinancialSync) {
+        try {
+          await triggerFinancialSync(userId);
+          console.log('✅ WebSocket sync triggered after budget deletion');
+        } catch (error) {
+          console.error('⚠️ WebSocket sync failed:', error);
+        }
       }
 
       res.json({ message: 'Budget deleted successfully' });
