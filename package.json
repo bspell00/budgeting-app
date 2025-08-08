@@ -67,7 +67,7 @@
     "@types/crypto-js": "^4.2.2",
     "@types/pg": "^8.10.9",
     "dotenv-cli": "^7.3.0",
-    "eslint": "8.57.1",
+    "eslint": "9.32.0",
     "eslint-config-next": "14.2.18",
     "prisma": "^6.12.0"
   }
