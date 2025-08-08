@@ -50,8 +50,8 @@ export class MockBankService {
   private password: string;
 
   constructor() {
-    this.username = process.env.OBP_USERNAME || '';
-    this.password = process.env.OBP_PASSWORD || '';
+    this.username = process.env.MOCK_USERNAME || '';
+    this.password = process.env.MOCK_PASSWORD || '';
   }
 
   // Mock authentication

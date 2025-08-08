@@ -1,113 +1,268 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+// pages/api/plaid/sync.ts
+import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '../../lib/auth';
-import { PrismaClient } from '@prisma/client';
-import { decryptPlaidToken } from '../../lib/encryption';
-import { plaidClient } from '../../lib/plaid'; // Your Plaid client instance
+import { authOptions } from '../../../lib/auth';
+import { PlaidApi, Configuration, PlaidEnvironments } from 'plaid';
+import prisma from '../../../lib/prisma';
+import { decryptPlaidToken } from '../../../lib/encryption';
+import CreditCardAutomation from '../../../lib/credit-card-automation';
 
-const prisma = new PrismaClient();
+// optional realtime emit
+let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
+if (typeof window === 'undefined') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const websocketServer = require('../../../lib/websocket-server');
+    triggerFinancialSync = websocketServer.triggerFinancialSync;
+  } catch {}
+}
+
+// Plaid client (explicit version header)
+const plaidClient = new PlaidApi(
+  new Configuration({
+    basePath: PlaidEnvironments[(process.env.PLAID_ENV as any) || 'sandbox'],
+    baseOptions: {
+      headers: {
+        'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID || '',
+        'PLAID-SECRET': process.env.PLAID_SECRET || '',
+        'Plaid-Version': '2020-09-14',
+      },
+    },
+  })
+);
+
+// Helpers
+function calcAmount(plaidAmount: number, accountType?: string) {
+  // Credit: purchases are negative (outflow), payments positive (inflow)
+  return accountType === 'credit'
+    ? plaidAmount > 0
+      ? -plaidAmount
+      : Math.abs(plaidAmount)
+    : -plaidAmount; // depository: Plaid + = deposit, we store + as inflow? flip for consistency used elsewhere
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const session = await getServerSession(req, res, authOptions);
-  if (!session?.user) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
+  if (!session?.user) return res.status(401).json({ error: 'Unauthorized' });
   const userId = (session.user as any).id;
-  if (!userId) {
-    return res.status(401).json({ error: 'No user ID found' });
-  }
+  if (!userId) return res.status(401).json({ error: 'No user ID found' });
+
+  let broadcastQueued = false;
+  let totalNewTransactions = 0;
+  let totalUpdatedAccounts = 0;
 
   try {
-    // Get user's linked accounts
-    const accounts = await prisma.account.findMany({
+    // Pull all Plaid items for this user, with their accounts (and cursor on the item)
+    const items = await prisma.plaidItem.findMany({
       where: { userId },
-      select: {
-        id: true,
-        plaidAccessToken: true,
-        plaidAccountId: true,
+      include: {
+        accounts: {
+          select: {
+            id: true,
+            plaidAccessToken: true,
+            plaidAccountId: true,
+            accountType: true,
+          },
+        },
       },
     });
 
-    if (!accounts.length) {
-      return res.status(404).json({ error: 'No connected accounts found' });
+    if (!items.length) {
+      return res.status(404).json({ error: 'No connected items found' });
     }
 
-    let totalNewTransactions = 0;
-    let totalUpdatedAccounts = 0;
+    for (const item of items) {
+      // Need at least one account to get an access token
+      if (!item.accounts.length) continue;
 
-    for (const account of accounts) {
+      // Use the (decrypted) access token from any account under this item
+      const first = item.accounts.find(a => a.plaidAccessToken);
+      if (!first?.plaidAccessToken) continue;
+
+      const decrypted = decryptPlaidToken(first.plaidAccessToken) ?? first.plaidAccessToken;
+      if (!decrypted) continue;
+      const accessToken = decrypted;
+
+      // Map plaidAccountId → local account
+      const byPlaidId = new Map(
+        item.accounts
+          .filter(a => a.plaidAccountId)
+          .map(a => [a.plaidAccountId as string, a])
+      );
+
+      // 1) Update balances (optional but nice)
       try {
-        if (!account.plaidAccessToken || !account.plaidAccountId) {
-          console.warn('[sync] Skipping account with missing Plaid info:', account.id);
-          continue;
-        }
-
-        // Decrypt Plaid token
-        const accessToken = decryptPlaidToken(account.plaidAccessToken) ?? account.plaidAccessToken;
-        if (!accessToken) {
-          console.warn('[sync] Could not decrypt Plaid token for account:', account.id);
-          continue;
-        }
-
-        // Get balance from Plaid
-        const balanceRes = await plaidClient.accountsBalanceGet({ access_token: accessToken });
-        const plaidAcc = balanceRes.data.accounts.find(a => a.account_id === account.plaidAccountId);
-        if (plaidAcc) {
+        const accountsResp = await plaidClient.accountsGet({ access_token: accessToken });
+        for (const pAcc of accountsResp.data.accounts) {
+          const local = byPlaidId.get(pAcc.account_id);
+          if (!local) continue;
           await prisma.account.update({
-            where: { id: account.id },
+            where: { id: local.id },
             data: {
-              balance: plaidAcc.balances.current ?? 0,
-              availableBalance: plaidAcc.balances.available ?? plaidAcc.balances.current ?? 0,
+              balance: pAcc.balances.current ?? 0,
+              availableBalance: pAcc.balances.available ?? null,
             },
           });
           totalUpdatedAccounts++;
         }
+      } catch (e) {
+        console.warn('[plaid/sync] accountsGet failed (continuing)', e);
+      }
 
-        // Get transactions from Plaid (last 30 days example)
-        const now = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(now.getDate() - 30);
+      // 2) Incremental transactions sync (cursor lives on the PlaidItem)
+      let cursor = item.cursor || null;
+      const added: any[] = [];
+      let hasMore = true;
 
-        const txRes = await plaidClient.transactionsGet({
+      while (hasMore) {
+        const resp = await plaidClient.transactionsSync({
           access_token: accessToken,
-          start_date: thirtyDaysAgo.toISOString().split('T')[0],
-          end_date: now.toISOString().split('T')[0],
-          account_ids: [account.plaidAccountId],
+          cursor: cursor || undefined,
+          count: 250,
+        });
+        added.push(...resp.data.added);
+        hasMore = resp.data.has_more;
+        cursor = resp.data.next_cursor;
+      }
+
+      // Save cursor
+      if (cursor !== item.cursor) {
+        await prisma.plaidItem.update({
+          where: { id: item.id },
+          data: { cursor },
+        });
+      }
+
+      // 3) Insert NEW transactions, routed to the correct account
+      for (const t of added) {
+        const local = byPlaidId.get(t.account_id);
+        if (!local) continue;
+
+        // De-dupe by Plaid ID
+        const exists = await prisma.transaction.findUnique({
+          where: { plaidTransactionId: t.transaction_id },
+          select: { id: true },
+        });
+        if (exists) continue;
+
+        const amountFinal = calcAmount(t.amount, local.accountType);
+        const tDate = new Date(t.date);
+        const txMonth = tDate.getMonth() + 1;
+        const txYear = tDate.getFullYear();
+
+        // Categorize (keep your existing helper logic)
+        let category = CreditCardAutomation.categorizeTransaction(
+          t.name,
+          t.category || [],
+          t.personal_finance_category?.detailed || t.personal_finance_category?.primary,
+          amountFinal
+        );
+        // Credit card specific overrides
+        if (local.accountType === 'credit') {
+          if (t.amount < 0) {
+            category = 'Credit Card Payments';
+          } else if (
+            t.category?.includes('Interest') ||
+            t.category?.includes('Fee') ||
+            t.name.toLowerCase().includes('interest') ||
+            t.name.toLowerCase().includes('fee')
+          ) {
+            category = 'Interest & Fees';
+          }
+        }
+
+        // Optional: match manual uncleared within ±3 days and ±5%
+        const matchStart = new Date(tDate.getTime() - 3 * 24 * 60 * 60 * 1000);
+        const matchEnd   = new Date(tDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+        const unclearedManual = await prisma.transaction.findFirst({
+          where: {
+            userId,
+            accountId: local.id,
+            isManual: true,
+            cleared: false,
+            date: { gte: matchStart, lte: matchEnd },
+            amount: { gte: amountFinal * 0.95, lte: amountFinal * 1.05 },
+          },
+          select: { id: true },
         });
 
-        for (const t of txRes.data.transactions) {
-          const existing = await prisma.transaction.findFirst({
-            where: { plaidTransactionId: t.transaction_id },
-            select: { id: true },
+        await prisma.$transaction(async (trx) => {
+          if (unclearedManual) {
+            await trx.transaction.update({
+              where: { id: unclearedManual.id },
+              data: {
+                cleared: true,
+                plaidTransactionId: t.transaction_id,
+                amount: amountFinal,
+                description: t.name,
+                date: tDate,
+              },
+            });
+            return;
+          }
+
+          // Find/create budget bucket
+          let budget = await trx.budget.findFirst({
+            where: { userId, name: category, month: txMonth, year: txYear },
           });
-          if (existing) continue;
+          if (!budget && category === 'To Be Assigned') {
+            budget = await trx.budget.create({
+              data: {
+                userId,
+                name: 'To Be Assigned',
+                category: 'Income',
+                amount: 0,
+                spent: 0,
+                month: txMonth,
+                year: txYear,
+              },
+            });
+          }
 
-          const amount = t.amount * -1; // Plaid positive=expense, negative=credit, adjust if needed
-
-          await prisma.transaction.create({
+          // Create transaction
+          await trx.transaction.create({
             data: {
               userId,
-              accountId: account.id,
+              accountId: local.id,
+              budgetId: budget?.id || null,
               plaidTransactionId: t.transaction_id,
-              amount,
+              amount: amountFinal,
               description: t.name,
-              category: t.category?.[0] || 'Other',
+              category,
               subcategory: t.category?.[1] || null,
-              date: new Date(t.date),
+              date: tDate,
+              cleared: true,
+              isManual: false,
+              approved: false,
             },
           });
 
-          totalNewTransactions++;
-        }
-      } catch (err) {
-        console.error(`[sync] Error syncing account ${account.id}:`, err);
-        continue;
+          // Update budget totals
+          if (budget) {
+            if (amountFinal < 0) {
+              await trx.budget.update({
+                where: { id: budget.id },
+                data: { spent: { increment: Math.abs(amountFinal) } },
+              });
+            } else if (amountFinal > 0 && category === 'To Be Assigned') {
+              await trx.budget.update({
+                where: { id: budget.id },
+                data: { amount: { increment: amountFinal } },
+              });
+            }
+          }
+        });
+
+        totalNewTransactions++;
+        broadcastQueued = true;
       }
+    }
+
+    if (broadcastQueued && triggerFinancialSync) {
+      await triggerFinancialSync(userId);
     }
 
     return res.json({
@@ -116,11 +271,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       updatedAccounts: totalUpdatedAccounts,
       message: `Synced ${totalNewTransactions} new transactions and updated ${totalUpdatedAccounts} accounts`,
     });
-  } catch (error: any) {
-    console.error('Error syncing with Plaid:', error);
-    return res.status(500).json({
-      error: 'Failed to sync with Plaid',
-      details: error?.message ?? 'Unknown error',
-    });
+  } catch (error) {
+    console.error('Error syncing accounts:', error);
+    return res.status(500).json({ error: 'Failed to sync accounts' });
+  } finally {
+    // belt-and-suspenders: try to notify even if response already sent
+    if (broadcastQueued && triggerFinancialSync) {
+      try { await triggerFinancialSync(userId); } catch {}
+    }
   }
 }

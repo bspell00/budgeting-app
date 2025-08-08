@@ -13,13 +13,7 @@ const files = [
   'pages/api/transactions/update-category.ts',
   'pages/api/plaid/create-link-token.ts',
   'pages/api/plaid/exchange-token.ts',
-  'pages/api/plaid/sync.ts',
-  'pages/api/obp/connect.ts',
-  'pages/api/obp/sync.ts',
-  'pages/api/obp/debug-connect.ts',
-  'pages/api/obp/create-accounts.ts',
-  'pages/api/obp/import-sample-data.ts',
-  'pages/api/obp/test-real.ts'
+  'pages/api/plaid/sync.ts'
 ];
 
 function fixAuthInFile(filePath) {
