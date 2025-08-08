@@ -30,8 +30,8 @@
     "migrate:deploy": "npx prisma migrate deploy"
   },
   "engines": {
-    "node": "18.x",
-    "npm": "8.x"
+    "node": "18.20.3",
+    "npm": "8.19.4"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
