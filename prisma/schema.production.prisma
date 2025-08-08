@@ -27,21 +27,25 @@ model User {
 }
 
 model Account {
-  id                String   @id @default(cuid())
-  userId            String
-  plaidAccountId    String   @unique
-  plaidAccessToken  String
-  accountName       String
-  accountType       String
-  accountSubtype    String
-  balance           Float    @default(0)
-  availableBalance  Float?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String   @id @default(cuid())
+  userId           String
+  plaidAccessToken String?
+  plaidAccountId   String?            // <- remove @unique here
+  plaidItemId      String?
+  plaidItem        PlaidItem? @relation(fields: [plaidItemId], references: [id])
+  plaidCursor      String?
+  accountName      String
+  accountType      String
+  accountSubtype   String?
+  balance          Float    @default(0)
+  availableBalance Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
 
+  @@unique([userId, plaidAccountId]) // ← keep this
   @@index([userId])
 }
 
@@ -67,31 +71,32 @@ model Budget {
 }
 
 model Transaction {
-  id                  String    @id @default(cuid())
-  userId              String
-  accountId           String
-  budgetId            String?
-  payeeId             String?
-  plaidTransactionId  String?   @unique
-  amount              Float
-  description         String
-  category            String
-  subcategory         String?
-  date                DateTime
-  cleared             Boolean   @default(false)
-  approved            Boolean   @default(false)
-  isManual            Boolean   @default(false)
-  flagColor           String?
-  embedding           String?   // JSON array of float values for vector search
-  embeddingCreatedAt  DateTime? // Track when embedding was generated
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  userId             String
+  accountId          String
+  budgetId           String?
+  payeeId            String?
+  plaidTransactionId String?   // <- remove @unique here
+  amount             Float
+  description        String
+  category           String
+  subcategory        String?
+  date               DateTime
+  cleared            Boolean   @default(false)
+  approved           Boolean   @default(false)
+  isManual           Boolean   @default(false)
+  flagColor          String?
+  embedding          String?
+  embeddingCreatedAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account       Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  budget        Budget?         @relation(fields: [budgetId], references: [id])
-  payee         Payee?          @relation(fields: [payeeId], references: [id])
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  budget  Budget? @relation(fields: [budgetId], references: [id])
+  payee   Payee?  @relation(fields: [payeeId], references: [id])
 
+  @@unique([userId, plaidTransactionId]) // ← keep this
   @@index([userId])
   @@index([accountId])
   @@index([budgetId])
