@@ -6,6 +6,17 @@ import CreditCardAutomation from '../../../lib/credit-card-automation';
 
 const prisma = new PrismaClient();
 
+// WebSocket integration for real-time updates
+let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
+if (typeof window === 'undefined') {
+  try {
+    const websocketServer = require('../../../lib/websocket-server');
+    triggerFinancialSync = websocketServer.triggerFinancialSync;
+  } catch (error) {
+    console.log('[update-category] WebSocket server not available');
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user) {
@@ -55,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       let newBudget = await prisma.budget.findFirst({
         where: {
           userId: userId,
-          category: category,
+          name: category,
           month: month,
           year: year,
         }
@@ -72,15 +83,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
 
-      // Update the transaction with new category and budget
-      const updatedTransaction = await prisma.transaction.update({
-        where: { id: transactionId },
-        data: {
-          category: category,
-          budgetId: newBudget?.id || null,
-        },
-      });
-
       // Add amount to new budget if it exists and is an expense
       if (newBudget && currentTransaction.amount < 0) {
         await prisma.budget.update({
@@ -93,8 +95,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
       }
 
-      // Note: Credit card automation is now triggered by budget assignments, not transaction updates
-      // This ensures money only moves when you manually assign budget to cover expenses
+      // Update the transaction with new category and budget
+      const updatedTransaction = await prisma.transaction.update({
+        where: { id: transactionId, userId },
+        data: { 
+          category: category,
+          budgetId: newBudget?.id || null
+        },
+      });
+
+      // Trigger WebSocket update for real-time UI sync
+      if (triggerFinancialSync) {
+        try {
+          await triggerFinancialSync(userId);
+          console.log('[update-category] ✅ WebSocket sync triggered for user', userId);
+        } catch (error) {
+          console.log('[update-category] ⚠️ WebSocket sync failed:', error instanceof Error ? error.message : error);
+        }
+      }
 
       res.json({ success: true, transaction: updatedTransaction });
     } catch (error) {

@@ -3,42 +3,28 @@ import { useEffect } from 'react';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-export const useDashboard = () => {
-  const { data, error, isLoading } = useSWR('/api/dashboard', fetcher, {
+export const useDashboard = (month?: number, year?: number) => {
+  const url = month && year ? `/api/dashboard?month=${month}&year=${year}` : '/api/dashboard';
+  const { data, error, isLoading } = useSWR(url, fetcher, {
     refreshInterval: 0, // Disabled polling - use WebSocket events instead
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
+    onSuccess: (data) => {
+      console.log('💰 Dashboard data updated via SWR:', {
+        toBeAssigned: data?.toBeAssigned,
+        categoriesCount: data?.categories?.length,
+        timestamp: new Date().toISOString()
+      });
+    }
   });
 
-  // Listen for WebSocket real-time sync events
-  useEffect(() => {
-    const handleRealtimeSync = (event: any) => {
-      try {
-        console.log('🔄 Dashboard: Received realtime-sync event, refreshing...');
-        const detail = event.detail || {};
-        console.log('🔄 Event detail:', detail);
-        mutate('/api/dashboard');
-      } catch (error) {
-        console.error('❌ Error handling realtime-sync in Dashboard:', error);
-        // Still try to refresh on error
-        mutate('/api/dashboard');
-      }
-    };
-
-    // Use a more specific event listener to avoid conflicts
-    window.addEventListener('realtime-sync', handleRealtimeSync);
-    return () => {
-      try {
-        window.removeEventListener('realtime-sync', handleRealtimeSync);
-      } catch (error) {
-        console.warn('⚠️ Error removing realtime-sync listener:', error);
-      }
-    };
-  }, []);
+  // Real-time updates are now handled by the useWebSocket hook in Dashboard
+  // The WebSocket hook triggers SWR mutations directly via mutate('/api/dashboard')
+  // This ensures the dashboard data stays in sync automatically
 
   // Simple refresh function for local development
   const refresh = () => {
-    mutate('/api/dashboard');
+    mutate(url);
   };
 
   // Budget update with actual API call
@@ -64,14 +50,14 @@ export const useDashboard = () => {
       console.log('✅ Budget updated successfully:', updatedBudget);
 
       // Refresh dashboard data after successful update
-      mutate('/api/dashboard');
+      mutate(url);
       
       return updatedBudget;
     } catch (error) {
       console.error('❌ Budget update failed:', error);
       
       // Still refresh dashboard in case of error to get current state
-      mutate('/api/dashboard');
+      mutate(url);
       throw error;
     }
   };
@@ -82,7 +68,7 @@ export const useDashboard = () => {
     
     // Immediate server refresh
     setTimeout(() => {
-      mutate('/api/dashboard');
+      mutate(url);
     }, 100);
   };
 
@@ -91,7 +77,7 @@ export const useDashboard = () => {
     console.log('📝 Local: Creating budget:', budgetData.name);
     
     // Create temporary optimistic entry
-    mutate('/api/dashboard', (currentData: any) => {
+    mutate(url, (currentData: any) => {
       if (!currentData) return currentData;
       
       // Add new budget to appropriate category
@@ -115,7 +101,7 @@ export const useDashboard = () => {
     
     // Immediate server refresh
     setTimeout(() => {
-      mutate('/api/dashboard');
+      mutate(url);
     }, 100);
   };
 
@@ -124,7 +110,7 @@ export const useDashboard = () => {
     console.log('🗑 Local: Deleting budget:', budgetId);
     
     // Optimistic removal
-    mutate('/api/dashboard', (currentData: any) => {
+    mutate(url, (currentData: any) => {
       if (!currentData?.categories) return currentData;
       
       const updatedCategories = currentData.categories.map((category: any) => ({
@@ -137,7 +123,7 @@ export const useDashboard = () => {
     
     // Immediate server refresh
     setTimeout(() => {
-      mutate('/api/dashboard');
+      mutate(url);
     }, 100);
   };
 

@@ -4,12 +4,27 @@ import type { Server as HTTPServer } from 'http';
 
 let io: IOServer | null = null;
 
+// TS globals so you can read/write these without errors
+declare global {
+  // eslint-disable-next-line no-var
+  var __io: IOServer | undefined;
+  // eslint-disable-next-line no-var
+  var triggerFinancialSync:
+    | ((userId: string, payload?: TxnChangePayload) => Promise<void>)
+    | undefined;
+}
+
+type TxnChangePayload = {
+  accountId?: string | null;
+  reason?: 'create' | 'update' | 'delete' | 'recat' | 'import' | 'sync';
+};
+
 /** Initialize a single Socket.IO server instance and cache it across HMR. */
 export function initWebSocket(server: HTTPServer): IOServer {
   // Reuse if already created (HMR/dev)
   if (io) return io;
-  if ((global as any).__io) {
-    io = (global as any).__io as IOServer;
+  if (global.__io) {
+    io = global.__io;
     return io;
   }
 
@@ -37,12 +52,13 @@ export function initWebSocket(server: HTTPServer): IOServer {
       });
       (global as any).__ioEngineHooked = true;
     }
-  } catch (_) {
-    // ignore
+  } catch {
+    /* ignore */
   }
 
-  (global as any).__io = io; // persist for HMR
-  (global as any).io = io;   // convenient global for emitters
+  global.__io = io;           // persist for HMR
+  (global as any).io = io;     // (optional) convenience for manual emits
+
   console.log('[ws] Socket.IO initialized');
 
   io.on('connection', (socket) => {
@@ -63,15 +79,21 @@ export function initWebSocket(server: HTTPServer): IOServer {
   return io;
 }
 
-/** Broadcast a "calculation-sync" event to a user's room. */
-export async function triggerFinancialSync(userId: string) {
+/** Broadcast a "transactions:changed" event to a user's room. */
+export async function triggerFinancialSync(
+  userId: string,
+  payload: TxnChangePayload = {}
+) {
   if (!userId) return;
-  const existing = io || ((global as any).__io as IOServer | undefined);
+  const existing = global.__io || io;
   if (!existing) {
     console.warn('[ws] triggerFinancialSync called before IO was ready');
     return;
   }
   const room = `user:${userId}`;
-  console.log('[ws] emit calculation-sync →', room);
-  existing.to(room).emit('calculation-sync', { ts: Date.now() });
+  console.log('[ws] emit transactions:changed →', room, payload);
+  existing.to(room).emit('transactions:changed', { ts: Date.now(), ...payload });
 }
+
+// 🔴 make the trigger discoverable from any API route (no require needed)
+global.triggerFinancialSync = triggerFinancialSync;

@@ -60,7 +60,7 @@ function safeDecryptToken(token: string): string | null {
       return decrypted;
     }
   } catch (error) {
-    console.warn('[plaid/sync] Token decryption failed:', error.message);
+    console.warn('[plaid/sync] Token decryption failed:', error instanceof Error ? error.message : error);
   }
   
   // Fallback to raw token
@@ -100,6 +100,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             plaidAccessToken: true,
             plaidAccountId: true,
             accountType: true,
+            accountName: true,
           },
         },
       },
@@ -342,22 +343,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return;
           }
 
-          // Find/create budget bucket
+          // Find/create budget bucket for any category
           let budget = await trx.budget.findFirst({
             where: { userId, name: category, month: txMonth, year: txYear },
           });
-          if (!budget && category === 'To Be Assigned') {
+          
+          if (!budget) {
+            // Determine the appropriate category group for the budget
+            let categoryGroup = 'General';
+            if (category === 'To Be Assigned') {
+              categoryGroup = 'Income';
+            } else if (category === 'Credit Card Payments') {
+              categoryGroup = 'Credit Card Payments';
+            } else if (['Transportation', 'Gas & Fuel', 'Eating Out', 'Groceries', 'Shopping'].includes(category)) {
+              categoryGroup = 'Frequent Spending';
+            } else if (['Hobbies', 'Fun Money', 'Entertainment'].includes(category)) {
+              categoryGroup = 'Just for Fun';
+            } else if (['Mortgage/Rent', 'Electric', 'Gas', 'Water', 'Internet', 'Car Insurance', 'Cellphone'].includes(category)) {
+              categoryGroup = 'Monthly Bills';
+            }
+
             budget = await trx.budget.create({
               data: {
                 userId,
-                name: 'To Be Assigned',
-                category: 'Income',
+                name: category,
+                category: categoryGroup,
                 amount: 0,
                 spent: 0,
                 month: txMonth,
                 year: txYear,
               },
             });
+            console.log(`[plaid/sync] Created new budget: ${category} in ${categoryGroup}`);
           }
 
           // Create transaction

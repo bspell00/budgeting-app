@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'No user ID found' });
   }
 
-  const { accountName, accountType, accountSubtype, balance, availableBalance } = req.body;
+  const { accountName, accountType, accountSubtype, balance, availableBalance, isJustWatching } = req.body;
 
   // Validate required fields
   if (!accountName || !accountType || !accountSubtype || balance === undefined) {
@@ -42,11 +42,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         accountSubtype: accountSubtype || '',
         balance: parseFloat(balance),
         availableBalance: availableBalance ? parseFloat(availableBalance) : null,
+        isJustWatching: isJustWatching || false,
       },
     });
 
-    // If it's a credit card, auto-create payment payee and budget
-    if (accountType === 'credit') {
+    // Create payment categories for "Just Watching" accounts
+    if (isJustWatching) {
+      console.log(`👀 Creating payment category for Just Watching account: ${accountName}`);
+      
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      
+      // Determine category name based on account type
+      let categoryName = '';
+      let categoryGroup = 'Just Watching';
+      
+      if (accountType === 'loan') {
+        if (accountSubtype === 'mortgage') {
+          categoryName = `${accountName} Payment`;
+          categoryGroup = 'Housing';
+        } else {
+          categoryName = `${accountName} Payment`;
+          categoryGroup = 'Debt Payments';
+        }
+      } else if (accountType === 'investment') {
+        categoryName = `${accountName} Contribution`;
+        categoryGroup = 'Savings & Investments';
+      } else {
+        categoryName = `${accountName} Payment`;
+        categoryGroup = 'Just Watching';
+      }
+      
+      try {
+        await prisma.budget.create({
+          data: {
+            userId: userId,
+            name: categoryName,
+            amount: 0, // Start with $0 for zero-based budgeting
+            category: categoryGroup,
+            month: currentMonth,
+            year: currentYear,
+            spent: 0,
+          },
+        });
+        console.log(`✅ Created payment budget for Just Watching account: ${categoryName}`);
+      } catch (error) {
+        console.log(`Budget for ${categoryName} already exists`);
+      }
+    }
+    
+    // If it's a credit card and NOT just watching, auto-create payment payee and budget
+    if (accountType === 'credit' && !isJustWatching) {
       console.log(`💳 Creating payment payee for credit card: ${accountName}`);
       
       // Create the "Payment: [Card Name]" payee for YNAB-style payments

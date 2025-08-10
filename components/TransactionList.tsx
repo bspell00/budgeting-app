@@ -1369,17 +1369,29 @@ export default function TransactionList({
           setSelectedTransactionForCategory(null);
         }}
         onSelectCategory={(categoryName) => {
+          console.log('🏷️ TRANSACTION LIST: Category selected:', { selectedTransactionForCategory, categoryName, hasUpdateFunction: !!onUpdateTransaction });
+          
+          // 🚀 INSTANT FEEDBACK - Close the flyout immediately to show responsiveness
+          setShowCategoryFlyout(false);
+          setSelectedTransactionForCategory(null);
+          
           if (selectedTransactionForCategory && onUpdateTransaction) {
+            console.log('🏷️ TRANSACTION LIST: Calling onUpdateTransaction...');
             onUpdateTransaction(selectedTransactionForCategory, { category: categoryName });
           }
         }}
         onCreateCategory={(categoryName, groupName) => {
+          // 🚀 INSTANT FEEDBACK - Close the flyout immediately
+          setShowCategoryFlyout(false);
+          const transactionId = selectedTransactionForCategory;
+          setSelectedTransactionForCategory(null);
+          
           if (onCreateCategory) {
             onCreateCategory(categoryName, groupName);
           }
           // After creating, update the transaction
-          if (selectedTransactionForCategory && onUpdateTransaction) {
-            onUpdateTransaction(selectedTransactionForCategory, { category: categoryName });
+          if (transactionId && onUpdateTransaction) {
+            onUpdateTransaction(transactionId, { category: categoryName });
           }
         }}
         categories={categoryGroups}

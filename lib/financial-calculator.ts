@@ -41,18 +41,25 @@ export class FinancialCalculator {
       })
     ]);
 
-    // Calculate account totals
+    // Calculate account totals - Exclude "Just Watching" accounts from budgeting calculations
     const cashAccounts = accounts.filter(account => 
-      account.accountType === 'depository' || 
-      account.accountType === 'investment' ||
-      (account.accountType === 'other' && account.balance > 0)
+      !account.isJustWatching && (
+        account.accountType === 'depository' || 
+        account.accountType === 'investment' ||
+        (account.accountType === 'other' && account.balance > 0)
+      )
     );
     
     const debtAccounts = accounts.filter(account => 
-      account.accountType === 'credit' || 
-      account.accountType === 'loan' ||
-      (account.accountType === 'other' && account.balance < 0)
+      !account.isJustWatching && (
+        account.accountType === 'credit' || 
+        account.accountType === 'loan' ||
+        (account.accountType === 'other' && account.balance < 0)
+      )
     );
+    
+    // Get Just Watching accounts separately for display purposes
+    const justWatchingAccounts = accounts.filter(account => account.isJustWatching);
     
     const totalCashBalance = cashAccounts.reduce((sum, account) => sum + Math.max(0, account.balance), 0);
     const totalDebtBalance = debtAccounts.reduce((sum, account) => sum + account.balance, 0);
@@ -71,6 +78,7 @@ export class FinancialCalculator {
         all: accounts,
         cash: cashAccounts,
         debt: debtAccounts,
+        justWatching: justWatchingAccounts,
         totalCash: totalCashBalance,
         totalDebt: totalDebtBalance,
         netWorth: totalNetWorth

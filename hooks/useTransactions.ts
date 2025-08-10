@@ -3,8 +3,13 @@ import { useEffect } from 'react';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
-export function useTransactions(accountId?: string) {
-  const key = accountId ? `/api/transactions?accountId=${accountId}` : '/api/transactions';
+export function useTransactions(accountId?: string, month?: number, year?: number) {
+  const params = new URLSearchParams();
+  if (accountId) params.append('accountId', accountId);
+  if (month) params.append('month', month.toString());
+  if (year) params.append('year', year.toString());
+  
+  const key = `/api/transactions${params.toString() ? '?' + params.toString() : ''}`;
   
   console.log('🔍 useTransactions LOCAL called with:', { 
     accountId: accountId, 

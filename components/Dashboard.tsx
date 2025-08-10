@@ -30,6 +30,7 @@ import {
   Zap,
   Settings,
   ChevronRight,
+  ChevronLeft,
   AlertCircle,
   AlertTriangle,
   CheckCircle,
@@ -49,6 +50,7 @@ import {
 } from 'lucide-react';
 import PlaidLink from './PlaidLink';
 import AccountModal from './AccountModal';
+import AccountTypeModal from './AccountTypeModal';
 import AccountClosureModal from './AccountClosureModal';
 import AIAdvisorDashboard from './AIAdvisorDashboard';
 import TransactionAlertBanner from './TransactionAlertBanner';
@@ -88,11 +90,16 @@ const Dashboard = () => {
   const [localLoading, setLocalLoading] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
   
+  // Monthly budget navigation state
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [isChangingMonth, setIsChangingMonth] = useState(false);
+  
   // Local state for optimistic updates (separate from SWR data)
   const [transactions, setTransactions] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   
-  // SWR hooks for real-time data with WebSocket integration
+  // SWR hooks for real-time data with WebSocket integration (with month/year filtering)
   const { 
     data: dashboardData, 
     error: dashboardError, 
@@ -103,7 +110,7 @@ const Dashboard = () => {
     createBudgetOptimistic,
     deleteBudgetOptimistic,
     refresh: refreshDashboard
-  } = useDashboard();
+  } = useDashboard(selectedMonth, selectedYear);
   
   const {
     data: transactionsData,
@@ -116,7 +123,11 @@ const Dashboard = () => {
     deleteTransactionOptimistic,
     toggleClearedOptimistic,
     refresh: refreshTransactions
-  } = useTransactions(leftSidebarTab === 'transactions' ? undefined : selectedAccount?.id); // Pass undefined for all transactions on Transactions tab
+  } = useTransactions(
+    leftSidebarTab === 'transactions' ? undefined : selectedAccount?.id, // Pass undefined for all transactions on Transactions tab
+    selectedMonth,
+    selectedYear
+  );
   
   const {
     data: accountsData,
@@ -125,6 +136,9 @@ const Dashboard = () => {
     syncAccounts,
     refresh: refreshAccounts
   } = useAccounts();
+  
+  // WebSocket for real-time updates
+  useWebSocket();
   
   // Use local state for optimistic updates on individual accounts, but always use SWR data for all transactions
   const finalTransactions = leftSidebarTab === 'transactions' 
@@ -286,6 +300,58 @@ const Dashboard = () => {
       refreshAccounts()
     ]);
   };
+
+  // Monthly navigation functions with instant data refresh
+  const navigateToPreviousMonth = () => {
+    const newMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
+    const newYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
+    
+    setIsChangingMonth(true);
+    setSelectedMonth(newMonth);
+    setSelectedYear(newYear);
+    
+    // Trigger instant refresh of all data for new month
+    refreshDashboard();
+    refreshTransactions();
+    
+    // Clear loading state after a short delay to allow SWR to update
+    setTimeout(() => setIsChangingMonth(false), 500);
+  };
+
+  const navigateToNextMonth = () => {
+    const newMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
+    const newYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
+    
+    setIsChangingMonth(true);
+    setSelectedMonth(newMonth);
+    setSelectedYear(newYear);
+    
+    // Trigger instant refresh of all data for new month
+    refreshDashboard();
+    refreshTransactions();
+    
+    // Clear loading state after a short delay to allow SWR to update
+    setTimeout(() => setIsChangingMonth(false), 500);
+  };
+
+  const navigateToCurrentMonth = () => {
+    setIsChangingMonth(true);
+    setSelectedMonth(new Date().getMonth() + 1);
+    setSelectedYear(new Date().getFullYear());
+    
+    // Trigger instant refresh of dashboard data for current month
+    refreshDashboard();
+    refreshTransactions();
+    
+    // Clear loading state after a short delay to allow SWR to update
+    setTimeout(() => setIsChangingMonth(false), 500);
+  };
+
+  // Format selected month/year for display
+  const selectedMonthDisplay = new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { 
+    month: 'long', 
+    year: 'numeric' 
+  });
   
   const fetchAISuggestions = async () => {
     try {
@@ -652,8 +718,10 @@ const Dashboard = () => {
   };
 
   const handleTransactionCategoryUpdate = async (transactionId: string, newCategory: string) => {
+    console.log('🏷️ DASHBOARD: handleTransactionCategoryUpdate called:', { transactionId, newCategory });
     try {
       // Use SWR optimistic update for transaction category
+      console.log('🏷️ DASHBOARD: About to call updateTransactionOptimistic...');
       await updateTransactionOptimistic(transactionId, { category: newCategory });
       
       setEditingTransaction(null);
@@ -716,11 +784,37 @@ const Dashboard = () => {
   };
 
   const handleUpdateTransaction = async (transactionId: string, updates: any) => {
+    console.log('🏷️ DASHBOARD: handleUpdateTransaction called:', { transactionId, updates });
+    
+    // 🚀 INSTANT UI UPDATE - Update local state immediately for instant feedback
+    setTransactions((prevTransactions: any[]) => 
+      prevTransactions.map(transaction => 
+        transaction.id === transactionId 
+          ? { ...transaction, ...updates }
+          : transaction
+      )
+    );
+    
+    // Also update account transactions if viewing an account
+    setAccountTransactions((prevAccountTransactions: any[]) => 
+      prevAccountTransactions.map(transaction => 
+        transaction.id === transactionId 
+          ? { ...transaction, ...updates }
+          : transaction
+      )
+    );
+    
     try {
-      // Use SWR optimistic update for transaction updates
+      // Use SWR optimistic update for transaction updates (this will sync with server)
+      console.log('🏷️ DASHBOARD: About to call updateTransactionOptimistic...');
       await updateTransactionOptimistic(transactionId, updates);
     } catch (error) {
       console.error('Error updating transaction:', error);
+      
+      // 🔄 REVERT on error - Get original data from SWR cache
+      // The WebSocket sync will restore the correct state, so we let SWR handle it
+      console.log('🔄 DASHBOARD: Error occurred, letting SWR restore correct state');
+      
       showError('Failed to update transaction. Please try again.');
     }
   };
@@ -821,13 +915,33 @@ const Dashboard = () => {
     // Close the modal
     setShowAccountTypeModal(false);
     
-    // Show success message
-    showSuccess(`Successfully connected! ${data.accounts || 0} accounts and ${data.transactions || 0} transactions imported.`);
+    // Show loading state
+    setLocalLoading(true);
     
-    // Hot reload to show new accounts and transactions immediately
-    console.log('🔄 Starting hot reload after Plaid connection...');
-    await hotReload();
-    console.log('✅ Hot reload completed');
+    try {
+      // Show initial success message
+      showSuccess(`Bank connected successfully! Syncing accounts and transactions...`);
+      
+      // Wait a moment for the server-side sync to complete
+      console.log('⏳ Waiting for server-side sync to complete...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Hot reload to show new accounts and transactions immediately
+      console.log('🔄 Starting hot reload after Plaid connection...');
+      await hotReload();
+      console.log('✅ Hot reload completed');
+      
+      // Show final success message with details
+      const accountCount = accounts?.length || 0;
+      const newAccountCount = data.accountCount || 0;
+      showSuccess(`✅ Connected ${newAccountCount} new accounts! Total: ${accountCount + newAccountCount} accounts`);
+      
+    } catch (error) {
+      console.error('❌ Error during Plaid success handling:', error);
+      showWarning('Account connected, but there was an issue syncing data. Please refresh the page.');
+    } finally {
+      setLocalLoading(false);
+    }
   };
 
   const handlePlaidExit = (error: any, metadata: any) => {
@@ -1581,18 +1695,31 @@ const Dashboard = () => {
               alt="Logo" 
               className="h-10 w-auto"
             />
-            <p className="text-white opacity-60 font-halyard-micro font-medium tracking-wide">
-              {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </p>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={navigateToPreviousMonth}
+                className="p-1 text-white opacity-60 hover:text-white hover:opacity-100 rounded-full hover:bg-white/20 transition-all duration-200"
+                title="Previous month"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={navigateToCurrentMonth}
+                className="text-white opacity-60 font-halyard-micro font-medium tracking-wide hover:opacity-100 transition-opacity duration-200 px-2 py-1 rounded-md hover:bg-white/10"
+                title="Go to current month"
+              >
+                {selectedMonthDisplay}
+              </button>
+              <button
+                onClick={navigateToNextMonth}
+                className="p-1 text-white opacity-60 hover:text-white hover:opacity-100 rounded-full hover:bg-white/20 transition-all duration-200"
+                title="Next month"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
           <div className="flex items-center space-x-1 sm:space-x-3 overflow-x-auto">
-            <button
-              onClick={() => setShowAccountTypeModal(true)}
-              className="flex items-center space-x-1 sm:space-x-2 text-white px-2 sm:px-4 py-2 rounded-full transition-all duration-300 text-sm font-medium flex-shrink-0 shadow-lg hover:shadow-xl hover:scale-105 border border-white/20 bg-evergreen hover:bg-coach-green"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span className="font-halyard font-bold">Add Account</span>
-            </button>
             <button
               onClick={handleSignOut}
               className="bg-white-asparagus text-gray-900 px-3 py-2 rounded-full hover:bg-white-asparagus/80 hover:shadow-md transition-all duration-300 hover:scale-105 text-sm border border-white-asparagus/50"
@@ -1672,46 +1799,37 @@ const Dashboard = () => {
             <div className="px-6 py-6 bg-white/60 backdrop-blur-sm border-b border-white/30">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-halyard font-bold text-[#151418] tracking-tight">Accounts</h3>
-                <span className="text-sm font-halyard-micro font-bold text-[#6B7280] bg-gray-100 px-2 py-1 rounded-full">{accounts.length}</span>
+                <span className="text-sm font-halyard-micro font-bold text-[#6B7280] bg-gray-100 px-2 py-1 rounded-full">
+                  {accounts.filter(account => !account.isJustWatching).length}
+                  {accounts.filter(account => account.isJustWatching).length > 0 && (
+                    <span className="ml-1 text-xs opacity-75">+{accounts.filter(account => account.isJustWatching).length}👀</span>
+                  )}
+                </span>
               </div>
               
               {/* Add Account Button */}
-              <PlaidLink 
-                onSuccess={async (data, metadata) => {
-                  console.log('🔗 Plaid Link success (sidebar):', { data, metadata });
-                  console.log('🔄 Starting hot reload from sidebar...');
-                  // Immediately refresh all data after successful connection
-                  await hotReload();
-                  console.log('✅ Hot reload completed from sidebar');
-                }}
-                onExit={(err, metadata) => {
-                  if (err) {
-                    console.error('Plaid Link error:', err);
-                  }
-                }}
+              <button 
+                onClick={() => setShowAccountTypeModal(true)}
+                className="w-full flex items-center space-x-2 p-3 text-white rounded-full transition-all duration-300 mb-4 shadow-lg hover:shadow-xl hover:scale-[1.02] border border-white/10"
+                style={{ backgroundColor: '#125B49' }}
+                onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#003527'}
+                onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#125B49'}
               >
-                <button 
-                  className="w-full flex items-center space-x-2 p-3 text-white rounded-full transition-all duration-300 mb-4 shadow-lg hover:shadow-xl hover:scale-[1.02] border border-white/10"
-                  style={{ backgroundColor: '#125B49' }}
-                  onMouseEnter={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#003527'}
-                  onMouseLeave={(e) => (e.target as HTMLButtonElement).style.backgroundColor = '#125B49'}
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span className="font-halyard font-bold">Add Account</span>
-                </button>
-              </PlaidLink>
+                <PlusCircle className="w-4 h-4" />
+                <span className="font-halyard font-bold">Add Account</span>
+              </button>
             </div>
             
-            {/* Accounts List - Takes remaining height */}
-            <div className="flex-1 overflow-y-auto px-4">
+            {/* Accounts List - Expanded to take all remaining height */}
+            <div className="flex-1 overflow-y-auto px-4 pb-6">
               {accounts.length > 0 ? (
                 <div className="space-y-4">
-                  {/* Cash Accounts */}
-                  {accounts.filter(account => account.accountType === 'depository').length > 0 && (
+                  {/* Cash Accounts - Active Only */}
+                  {accounts.filter(account => account.accountType === 'depository' && !account.isJustWatching).length > 0 && (
                     <div>
                       <h4 className="text-sm font-halyard-micro font-bold text-[#6B7280] px-2 mb-2 uppercase tracking-wider">Cash Accounts</h4>
                       <div className="space-y-1">
-                        {accounts.filter(account => account.accountType === 'depository').map((account) => (
+                        {accounts.filter(account => account.accountType === 'depository' && !account.isJustWatching).map((account) => (
                           <div 
                             key={account.id} 
                             className={`group px-4 py-3 rounded-full transition-all duration-300 cursor-pointer ${
@@ -1769,12 +1887,12 @@ const Dashboard = () => {
                     </div>
                   )}
 
-                  {/* Credit Accounts */}
-                  {accounts.filter(account => account.accountType === 'credit').length > 0 && (
+                  {/* Credit Accounts - Active Only */}
+                  {accounts.filter(account => account.accountType === 'credit' && !account.isJustWatching).length > 0 && (
                     <div>
                       <h4 className="text-sm font-halyard-micro font-bold text-[#6B7280] px-2 mb-2 uppercase tracking-wider">Credit Accounts</h4>
                       <div className="space-y-1">
-                        {accounts.filter(account => account.accountType === 'credit').map((account) => (
+                        {accounts.filter(account => account.accountType === 'credit' && !account.isJustWatching).map((account) => (
                           <div 
                             key={account.id} 
                             className={`group px-4 py-3 rounded-full transition-all duration-300 cursor-pointer ${
@@ -1836,6 +1954,66 @@ const Dashboard = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Just Watching Accounts */}
+                  {accounts.filter(account => account.isJustWatching).length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-halyard-micro font-bold text-[#6B7280] px-2 mb-2 uppercase tracking-wider flex items-center">
+                        <span>Just Watching</span>
+                        <span className="ml-2 text-xs bg-gray-100 px-2 py-0.5 rounded-full">👀</span>
+                      </h4>
+                      <div className="space-y-1">
+                        {accounts.filter(account => account.isJustWatching).map((account) => (
+                          <div 
+                            key={account.id} 
+                            className={`group px-4 py-3 rounded-full transition-all duration-300 cursor-pointer ${
+                              selectedAccount?.id === account.id 
+                                ? 'bg-white/80 backdrop-blur-sm text-[#151418] shadow-lg border border-orange-200/50' 
+                                : 'text-[#6B7280] hover:bg-white/50 hover:backdrop-blur-sm hover:text-[#151418] hover:shadow-md hover:scale-[1.02] border border-transparent hover:border-white/30'
+                            }`}
+                            onClick={() => handleAccountClick(account)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                <div className={`w-3 h-3 rounded-full ${
+                                  account.accountType === 'investment' ? 'bg-blue-500' :
+                                  account.accountType === 'loan' ? 'bg-orange-500' : 'bg-gray-400'
+                                }`}></div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-halyard font-bold text-sm truncate">{account.accountName}</p>
+                                  <p className="font-halyard-micro text-xs opacity-60 uppercase tracking-wide">
+                                    {account.accountSubtype || account.accountType} • Just Watching
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <div className="text-right">
+                                  <p className="font-halyard font-bold text-sm text-teal-midnight">
+                                    {new Intl.NumberFormat('en-US', {
+                                      style: 'currency',
+                                      currency: 'USD',
+                                      minimumFractionDigits: 0,
+                                      maximumFractionDigits: 0,
+                                    }).format(account.balance)}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveAccount(account);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-[#9CA3AF] hover:text-red-500 rounded"
+                                  title={`Remove ${account.accountName}`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full">
@@ -1847,155 +2025,25 @@ const Dashboard = () => {
                 </div>
               )}
             </div>
-          
-            {/* Tab Content Section - Now minimal space at bottom */}
-            <div className="border-t border-[#EFF2F0] p-6 bg-[#FFFFFF]">
-              {leftSidebarTab === 'budget' && (
-              <div>
-                <h3 className="text-lg font-semibold text-[#151418] mb-4">Budget Overview</h3>
-                <div className="space-y-3">
-                  <div className="p-3 bg-[#FFFFFF] rounded-xl border border-[#EFF2F0]">
-                    <p className="text-sm text-[#151418] font-medium">Quick Stats</p>
-                    <p className="text-xs text-[#6B7280] mt-1">View category groups in main content</p>
-                  </div>
-                  <button
-                    onClick={() => setShowBudgetModal(true)}
-                    className="w-full flex items-center space-x-2 p-3 bg-evergreen text-white rounded-full hover:bg-[#003527] transition-colors"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                    <span>Add Budget Line</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {leftSidebarTab === 'transactions' && (
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-[#151418]">Recent Transactions</h3>
-                  <button
-                    onClick={() => {/* No modal needed */}}
-                    className="text-evergreen hover:text-coach-green text-sm font-medium"
-                  >
-                    Add
-                  </button>
-                </div>
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {dashboardData.recentTransactions && dashboardData.recentTransactions.length > 0 ? dashboardData.recentTransactions.map((transaction: any, index: number) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                      <div>
-                        <p className="font-medium text-gray-900">{transaction.name}</p>
-                        <p className="text-sm text-gray-600">{transaction.category} • {transaction.date}</p>
-                      </div>
-                      <span className={`font-medium ${transaction.amount > 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                        {formatCurrency(transaction.amount)}
-                      </span>
-                    </div>
-                  )) : (
-                    <div className="p-3 text-center text-gray-500">
-                      <p>No recent transactions</p>
-                      <button
-                        onClick={() => {/* No modal needed */}}
-                        className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                      >
-                        Add your first transaction
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {leftSidebarTab === 'debt' && (
-              <div>
-                <h3 className="text-lg font-semibold text-[#151418] mb-4">Debt Payoff</h3>
-                <div className="space-y-3">
-                  <div className="p-3 bg-[#FFFFFF] rounded-xl border border-[#EFF2F0]">
-                    <p className="text-sm text-[#151418] font-medium">Debt Payoff Tools</p>
-                    <p className="text-xs text-[#6B7280] mt-1">Plan your debt-free journey</p>
-                  </div>
-                  {/* Summary for actual debts only */}
-                  {accounts && accounts.filter(acc => 
-                    (acc.accountType === 'credit' && acc.balance > 0) || 
-                    (acc.accountType === 'loan' && acc.balance < 0)
-                  ).length > 0 ? (
-                    <div className="p-3 bg-red-50 rounded-xl border border-red-200">
-                      <p className="text-sm font-medium text-red-900">
-                        {accounts.filter(acc => 
-                          (acc.accountType === 'credit' && acc.balance > 0) || 
-                          (acc.accountType === 'loan' && acc.balance < 0)
-                        ).length} debt account{accounts.filter(acc => 
-                          (acc.accountType === 'credit' && acc.balance > 0) || 
-                          (acc.accountType === 'loan' && acc.balance < 0)
-                        ).length > 1 ? 's' : ''} to pay off
-                      </p>
-                      <p className="text-xs text-red-700 mt-1">
-                        Total: -{formatCurrency(accounts.filter(acc => 
-                          (acc.accountType === 'credit' && acc.balance > 0) || 
-                          (acc.accountType === 'loan' && acc.balance < 0)
-                        ).reduce((sum, acc) => sum + Math.abs(acc.balance), 0))}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="p-3 text-center text-gray-500">
-                      <p className="text-sm">No debt to pay off</p>
-                      <p className="text-xs mt-1">You're debt-free! 🎉</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {leftSidebarTab === 'charts' && (
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Chart Types</h3>
-                <div className="space-y-3">
-                  <div className="p-3 bg-indigo-50 rounded-xl">
-                    <p className="text-sm text-indigo-600 font-medium">6 Chart Types Available</p>
-                    <p className="text-xs text-indigo-500 mt-1">Switch tabs in main content to explore</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2 bg-gray-50 rounded text-center">
-                      <TrendingUp className="w-4 h-4 mx-auto text-green-500 mb-1" />
-                      <span className="block text-gray-600">Spending</span>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded text-center">
-                      <PieChart className="w-4 h-4 mx-auto text-purple-500 mb-1" />
-                      <span className="block text-gray-600">Categories</span>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded text-center">
-                      <BarChart3 className="w-4 h-4 mx-auto text-blue-500 mb-1" />
-                      <span className="block text-gray-600">Budget</span>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded text-center">
-                      <DollarSign className="w-4 h-4 mx-auto text-orange-500 mb-1" />
-                      <span className="block text-gray-600">Cash Flow</span>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded text-center">
-                      <Target className="w-4 h-4 mx-auto text-red-500 mb-1" />
-                      <span className="block text-gray-600">Goals</span>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded text-center">
-                      <Calendar className="w-4 h-4 mx-auto text-indigo-500 mb-1" />
-                      <span className="block text-gray-600">Monthly</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-
-            </div>
           </div>
         </aside>
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col lg:flex-row min-h-0 min-w-0">
           {/* Main Content */}
-          <main className="flex-1 p-4 lg:p-6 xl:p-8 bg-[#F8F8F5] overflow-auto min-w-0">
+          <main className="flex-1 p-4 lg:p-6 xl:p-8 bg-[#F8F8F5] overflow-auto min-w-0 relative">
             {/* Budget Tab Content */}
             {leftSidebarTab === 'budget' && (
               <>
+                {/* Loading Overlay for Month Changes */}
+                {isChangingMonth && (
+                  <div className="absolute inset-0 bg-white bg-opacity-75 z-10 flex items-center justify-center">
+                    <div className="text-center">
+                      <RefreshCw className="w-8 h-8 text-teal-600 animate-spin mx-auto mb-2" />
+                      <p className="text-teal-600 font-medium">Loading {selectedMonthDisplay}...</p>
+                    </div>
+                  </div>
+                )}
                 {/* Main Stats */}
                 <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 mb-6 lg:mb-8">
                   {/* To Be Assigned - Largest card */}
@@ -2699,51 +2747,13 @@ const Dashboard = () => {
 
 
       {/* Account Type Selection Modal */}
-      {showAccountTypeModal && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl border border-white/20 animate-in fade-in-0 zoom-in-95 duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-halyard font-bold text-found-text tracking-tight">Add Account</h2>
-              <button
-                onClick={() => setShowAccountTypeModal(false)}
-                className="text-gray-400 hover:text-found-text"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
-            <p className="font-halyard text-found-text opacity-80 mb-6">Choose how you'd like to add your account:</p>
-            
-            <div className="space-y-3">
-              <PlaidLink onSuccess={handlePlaidSuccess} onExit={handlePlaidExit}>
-                <button 
-                  className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-[#125B49]/10 to-[#9cc49c]/10 border border-[#125B49]/30 rounded-full hover:from-[#125B49]/20 hover:to-[#9cc49c]/20 hover:border-[#125B49]/50 transition-all duration-300 hover:scale-[1.02] shadow-sm hover:shadow-md"
-                >
-                  <div className="text-left">
-                    <div className="font-halyard font-bold text-found-text">Connect Bank Account</div>
-                    <div className="font-halyard-micro text-sm text-found-text opacity-60">Automatically sync transactions via Plaid</div>
-                  </div>
-                  <div className="w-2 h-2 bg-found-accent rounded-full"></div>
-                </button>
-              </PlaidLink>
-              
-              <button 
-                onClick={() => {
-                  setShowAccountTypeModal(false);
-                  setShowAccountModal(true);
-                }}
-                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-blue-50/50 to-purple-50/50 border border-blue-200/50 rounded-full hover:from-blue-50 hover:to-purple-50 hover:border-blue-300/60 transition-all duration-300 hover:scale-[1.02] shadow-sm hover:shadow-md"
-              >
-                <div className="text-left">
-                  <div className="font-halyard font-bold text-found-text">Add Manual Account</div>
-                  <div className="font-halyard-micro text-sm text-found-text opacity-60">Track account manually without automatic sync</div>
-                </div>
-                <div className="w-2 h-2 bg-found-accent rounded-full"></div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AccountTypeModal
+        isOpen={showAccountTypeModal}
+        onClose={() => setShowAccountTypeModal(false)}
+        onManualAccount={() => setShowAccountModal(true)}
+        onPlaidSuccess={handlePlaidSuccess}
+        onPlaidExit={handlePlaidExit}
+      />
       
       <AccountModal
         isOpen={showAccountModal}

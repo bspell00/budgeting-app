@@ -10,6 +10,7 @@ interface AccountModalProps {
     accountSubtype: string;
     balance: number;
     availableBalance?: number;
+    isJustWatching: boolean;
   }) => void;
 }
 
@@ -23,11 +24,11 @@ export default function AccountModal({ isOpen, onClose, onSubmit }: AccountModal
   });
 
   const accountTypes = [
-    { value: 'depository', label: 'Bank Account' },
-    { value: 'credit', label: 'Credit Card' },
-    { value: 'loan', label: 'Loan' },
-    { value: 'investment', label: 'Investment' },
-    { value: 'other', label: 'Other' }
+    { value: 'depository', label: 'Bank Account', isJustWatching: false },
+    { value: 'credit', label: 'Credit Card', isJustWatching: false },
+    { value: 'loan', label: 'Loan', isJustWatching: true },
+    { value: 'investment', label: 'Investment', isJustWatching: true },
+    { value: 'other', label: 'Other', isJustWatching: false }
   ];
 
   const accountSubtypes = {
@@ -50,7 +51,9 @@ export default function AccountModal({ isOpen, onClose, onSubmit }: AccountModal
     investment: [
       { value: '401k', label: '401(k)' },
       { value: 'ira', label: 'IRA' },
-      { value: 'brokerage', label: 'Brokerage' }
+      { value: 'roth_ira', label: 'Roth IRA' },
+      { value: 'brokerage', label: 'Brokerage' },
+      { value: 'retirement', label: 'Retirement Account' }
     ],
     other: [
       { value: 'other', label: 'Other' }
@@ -62,13 +65,15 @@ export default function AccountModal({ isOpen, onClose, onSubmit }: AccountModal
     
     const balance = parseFloat(formData.balance) || 0;
     const availableBalance = formData.availableBalance ? parseFloat(formData.availableBalance) : undefined;
+    const selectedAccountType = accountTypes.find(type => type.value === formData.accountType);
     
     onSubmit({
       accountName: formData.accountName,
       accountType: formData.accountType,
       accountSubtype: formData.accountSubtype,
       balance: balance,
-      availableBalance: availableBalance
+      availableBalance: availableBalance,
+      isJustWatching: selectedAccountType?.isJustWatching || false
     });
     
     // Reset form
@@ -131,10 +136,15 @@ export default function AccountModal({ isOpen, onClose, onSubmit }: AccountModal
             >
               {accountTypes.map(type => (
                 <option key={type.value} value={type.value}>
-                  {type.label}
+                  {type.label}{type.isJustWatching ? ' (Just Watching)' : ''}
                 </option>
               ))}
             </select>
+            {accountTypes.find(t => t.value === formData.accountType)?.isJustWatching && (
+              <p className="text-xs text-blue-600 mt-1 bg-blue-50 p-2 rounded">
+                👀 <strong>Just Watching:</strong> This account will be excluded from budget calculations but you can create budget categories for payments to track balance changes.
+              </p>
+            )}
           </div>
 
           <div>

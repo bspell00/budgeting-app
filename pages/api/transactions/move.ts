@@ -5,6 +5,17 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// WebSocket integration for real-time updates
+let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
+if (typeof window === 'undefined') {
+  try {
+    const websocketServer = require('../../../lib/websocket-server');
+    triggerFinancialSync = websocketServer.triggerFinancialSync;
+  } catch (error) {
+    console.log('[move] WebSocket server not available');
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
   if (!session?.user) {
@@ -163,6 +174,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return `${account?.accountName || 'Unknown'}: ${change >= 0 ? '+' : ''}${change}`;
     });
 
+    // Trigger WebSocket update for real-time UI sync
+    if (triggerFinancialSync) {
+      try {
+        await triggerFinancialSync(userId);
+        console.log('[move] ✅ WebSocket sync triggered for user', userId);
+      } catch (error) {
+        console.log('[move] ⚠️ WebSocket sync failed:', error instanceof Error ? error.message : error);
+      }
+    }
+        // after updating transaction(s)
+    if (triggerFinancialSync) {
+      await triggerFinancialSync(userId);
+    }
     res.json({
       success: true,
       message: `Moved ${transactions.length} transaction(s) to ${targetAccount.accountName}`,

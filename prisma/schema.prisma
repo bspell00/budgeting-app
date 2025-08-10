@@ -53,6 +53,7 @@ model Account {
   accountName      String
   accountType      String
   accountSubtype   String?
+  isJustWatching   Boolean  @default(false) // Accounts for tracking only, excluded from budgets
   balance          Float    @default(0)
   availableBalance Float?
   createdAt        DateTime @default(now())

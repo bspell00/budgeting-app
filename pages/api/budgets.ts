@@ -95,21 +95,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } else if (req.method === 'GET') {
     try {
-      const currentMonth = new Date().getMonth() + 1;
-      const currentYear = new Date().getFullYear();
+      // Allow month/year to be passed as query parameters, default to current month/year
+      const { month, year } = req.query;
+      const targetMonth = month ? parseInt(month as string) : new Date().getMonth() + 1;
+      const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
 
       const budgets = await prisma.budget.findMany({
         where: {
           userId: userId,
-          month: currentMonth,
-          year: currentYear,
+          month: targetMonth,
+          year: targetYear,
         },
         include: {
           transactions: {
             where: {
               date: {
-                gte: new Date(currentYear, currentMonth - 1, 1),
-                lt: new Date(currentYear, currentMonth, 1),
+                gte: new Date(targetYear, targetMonth - 1, 1),
+                lt: new Date(targetYear, targetMonth, 1),
               },
             },
           },

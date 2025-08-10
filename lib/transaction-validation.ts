@@ -58,7 +58,9 @@ export async function validateAccountAccess(accountId: string, userId: string): 
 export async function getUserTransactionsFromConnectedAccounts(
   userId: string, 
   accountId?: string,
-  limit: number = 50
+  limit: number = 50,
+  month?: number,
+  year?: number
 ) {
   try {
     // Build where clause with proper user and account filtering
@@ -77,6 +79,14 @@ export async function getUserTransactionsFromConnectedAccounts(
         throw new Error('Account access denied or not found');
       }
       whereClause.accountId = accountId;
+    }
+
+    // Add month/year filtering if specified
+    if (month && year) {
+      whereClause.date = {
+        gte: new Date(year, month - 1, 1),
+        lt: new Date(year, month, 1)
+      };
     }
 
     const transactions = await prisma.transaction.findMany({

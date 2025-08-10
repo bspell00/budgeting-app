@@ -21,17 +21,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log('💰 Dashboard: Using simplified financial calculator');
+    // Allow month/year to be passed as query parameters, default to current month/year
+    const { month, year } = req.query;
+    const targetMonth = month ? parseInt(month as string) : new Date().getMonth() + 1;
+    const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
+    
+    console.log('💰 Dashboard: Using simplified financial calculator for:', { targetMonth, targetYear });
     
     // Use the centralized financial calculator for all calculations
-    const metrics = await FinancialCalculator.ensureToBeAssignedBudget(userId);
+    const metrics = await FinancialCalculator.ensureToBeAssignedBudget(userId, targetMonth, targetYear);
     
     // Get recent transactions and goals in parallel
     const [recentTransactions, goals] = await Promise.all([
       getUserTransactionsFromConnectedAccounts(
         userId,
         undefined, // No specific account filter
-        10 // Limit to 10 recent transactions
+        10, // Limit to 10 recent transactions
+        targetMonth,
+        targetYear
       ),
       prisma.goal.findMany({
         where: { userId: userId },

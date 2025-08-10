@@ -53,6 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         accountSubtype: account.accountSubtype,
         balance: account.balance,
         availableBalance: account.availableBalance,
+        isJustWatching: account.isJustWatching,
         transactionCount: account._count.transactions,
         lastUpdated: account.updatedAt,
       }));

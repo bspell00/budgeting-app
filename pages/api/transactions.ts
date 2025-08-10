@@ -6,14 +6,15 @@ import { FinancialCalculator } from '../../lib/financial-calculator';
 import CreditCardAutomation from '../../lib/credit-card-automation';
 import prisma from '../../lib/prisma';
 
-// WebSocket trigger for real-time updates
+// WebSocket integration for real-time updates
 let triggerFinancialSync: ((userId: string) => Promise<void>) | null = null;
 if (typeof window === 'undefined') {
   try {
     const websocketServer = require('../../lib/websocket-server');
     triggerFinancialSync = websocketServer.triggerFinancialSync;
-  } catch (e) {
-    console.log('WebSocket server not available');
+    console.log('[transactions] WebSocket server loaded successfully');
+  } catch (error) {
+    console.log('[transactions] WebSocket server not available:', error instanceof Error ? error.message : error);
   }
 }
 
@@ -158,19 +159,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } else if (req.method === 'GET') {
     try {
-      const { accountId } = req.query;
+      const { accountId, month, year } = req.query;
       
       console.log('🔍 GET /api/transactions called with:', { 
         userId, 
         accountId: accountId as string | undefined,
-        accountIdType: typeof accountId 
+        accountIdType: typeof accountId,
+        month: month as string | undefined,
+        year: year as string | undefined
       });
       
-      // Use the secure validation function to get transactions
+      // Use the secure validation function to get transactions with optional month/year filtering
       const transactions = await getUserTransactionsFromConnectedAccounts(
         userId,
         accountId as string | undefined,
-        50
+        50,
+        month ? parseInt(month as string) : undefined,
+        year ? parseInt(year as string) : undefined
       );
 
       console.log('🔍 GET /api/transactions result:', {
@@ -190,86 +195,170 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
   } else if (req.method === 'PATCH') {
-    const { id } = req.query;
-    const updates = req.body;
+  const { id } = req.query;
+  const updates = req.body;
 
-    // Handle specific validation for the cleared field if it's being updated
-    if (updates.hasOwnProperty('cleared') && typeof updates.cleared !== 'boolean') {
-      return res.status(400).json({ error: 'cleared field must be a boolean' });
+  if (updates.hasOwnProperty('cleared') && typeof updates.cleared !== 'boolean') {
+    return res.status(400).json({ error: 'cleared field must be a boolean' });
+  }
+
+  try {
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: id as string },
+      include: {
+        budget: true
+      }
+    });
+
+    if (!transaction || transaction.userId !== userId) {
+      return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    try {
-      const transaction = await prisma.transaction.findUnique({
-        where: { id: id as string }
+    const updateData: any = {};
+    if (updates.hasOwnProperty('cleared')) updateData.cleared = updates.cleared;
+    if (updates.hasOwnProperty('description')) updateData.description = updates.description;
+    if (updates.hasOwnProperty('category')) updateData.category = updates.category;
+    if (updates.hasOwnProperty('amount')) updateData.amount = parseFloat(updates.amount);
+    if (updates.hasOwnProperty('date')) updateData.date = new Date(updates.date);
+    if (updates.hasOwnProperty('accountId')) {
+      const targetAccount = await prisma.account.findFirst({
+        where: { id: updates.accountId, userId }
       });
+      if (!targetAccount) {
+        return res.status(403).json({ error: 'Target account not found or access denied' });
+      }
+      updateData.accountId = updates.accountId;
+    }
 
-      if (!transaction || transaction.userId !== userId) {
-        return res.status(404).json({ error: 'Transaction not found' });
-      }
+    // 🔄 Handle budget updates when category changes
+    let newBudget = null;
+    if (updates.hasOwnProperty('category')) {
+      try {
+        const transactionDate = new Date(transaction.date);
+        const month = transactionDate.getMonth() + 1;
+        const year = transactionDate.getFullYear();
 
-      // Prepare the update data object
-      const updateData: any = {};
-      
-      // Handle each possible field update
-      if (updates.hasOwnProperty('cleared')) {
-        updateData.cleared = updates.cleared;
-      }
-      if (updates.hasOwnProperty('description')) {
-        updateData.description = updates.description;
-      }
-      if (updates.hasOwnProperty('category')) {
-        updateData.category = updates.category;
-      }
-      if (updates.hasOwnProperty('amount')) {
-        updateData.amount = parseFloat(updates.amount);
-      }
-      if (updates.hasOwnProperty('date')) {
-        updateData.date = new Date(updates.date);
-      }
-      if (updates.hasOwnProperty('accountId')) {
-        // Validate that the user owns the target account
-        const targetAccount = await prisma.account.findFirst({
-          where: { 
-            id: updates.accountId,
-            userId: userId
+        console.log('💰 Processing category change:', {
+          oldCategory: transaction.category,
+          newCategory: updates.category,
+          transactionAmount: transaction.amount,
+          oldBudgetId: transaction.budgetId
+        });
+
+        // Remove amount from old budget if it exists and is an expense
+        if (transaction.budgetId && transaction.amount < 0) {
+          try {
+            await prisma.budget.update({
+              where: { id: transaction.budgetId },
+              data: {
+                spent: {
+                  decrement: Math.abs(transaction.amount)
+                }
+              }
+            });
+            console.log('💰 Removed transaction amount from old budget');
+          } catch (error) {
+            console.error('⚠️ Error removing from old budget:', error);
+            // Continue - don't fail the entire transaction
+          }
+        }
+
+        // Find or create budget for new category
+        newBudget = await prisma.budget.findFirst({
+          where: {
+            userId: userId,
+            name: updates.category,
+            month: month,
+            year: year,
           }
         });
-        if (!targetAccount) {
-          return res.status(403).json({ error: 'Target account not found or access denied' });
+
+        // Auto-create budget if it doesn't exist
+        if (!newBudget) {
+          try {
+            newBudget = await prisma.budget.create({
+              data: {
+                userId: userId,
+                name: updates.category,
+                category: 'General', // Default category group
+                amount: 0,
+                spent: 0,
+                month: month,
+                year: year,
+              }
+            });
+            console.log('💰 Created new budget for category:', updates.category);
+          } catch (error) {
+            console.error('⚠️ Error creating new budget:', error);
+            // Try to find again in case of race condition
+            newBudget = await prisma.budget.findFirst({
+              where: {
+                userId: userId,
+                name: updates.category,
+                month: month,
+                year: year,
+              }
+            });
+          }
         }
-        updateData.accountId = updates.accountId;
-      }
 
-      const updatedTransaction = await prisma.transaction.update({
-        where: { id: id as string },
-        data: updateData
-      });
+        // Link transaction to new budget
+        if (newBudget) {
+          updateData.budgetId = newBudget.id;
 
-      // Trigger financial sync after update
-      if (FinancialCalculator && typeof FinancialCalculator.ensureToBeAssignedBudget === 'function') {
-        try {
-          await FinancialCalculator.ensureToBeAssignedBudget(userId);
-          console.log('✅ Financial sync completed after transaction update');
-        } catch (error) {
-          console.error('⚠️ Financial sync failed after transaction update:', error);
+          // Add amount to new budget if it's an expense
+          if (transaction.amount < 0) {
+            try {
+              await prisma.budget.update({
+                where: { id: newBudget.id },
+                data: {
+                  spent: {
+                    increment: Math.abs(transaction.amount)
+                  }
+                }
+              });
+              console.log('💰 Added transaction amount to new budget');
+            } catch (error) {
+              console.error('⚠️ Error adding to new budget:', error);
+              // Continue - don't fail the entire transaction
+            }
+          }
         }
+      } catch (error) {
+        console.error('⚠️ Error in budget sync logic:', error);
+        // Don't fail the transaction update - just log the error
       }
-
-      // Trigger WebSocket update for real-time sync
-      if (triggerFinancialSync) {
-        try {
-          await triggerFinancialSync(userId);
-          console.log('✅ WebSocket sync triggered after transaction update');
-        } catch (error) {
-          console.error('⚠️ WebSocket sync failed:', error);
-        }
-      }
-
-      res.json(updatedTransaction);
-    } catch (error) {
-      console.error('Error updating transaction:', error);
-      res.status(500).json({ error: 'Failed to update transaction' });
     }
+
+    const updated = await prisma.transaction.update({
+      where: { id: id as string },
+      data: updateData
+    });
+
+    // ✅ Trigger instant WebSocket update
+    const wsTrigger = global.triggerFinancialSync || triggerFinancialSync;
+    if (wsTrigger) {
+      await wsTrigger(userId, { reason: 'update', accountId: updated.accountId });
+      console.log('✅ Real-time WS update sent after PATCH');
+    } else {
+      console.warn('⚠️ No WebSocket trigger function available after PATCH');
+    }
+
+    return res.json(updated);
+  } catch (error) {
+    console.error('❌ Error updating transaction:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      transactionId: id,
+      updates
+    });
+    res.status(500).json({ 
+      error: 'Failed to update transaction', 
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+
   } else if (req.method === 'DELETE') {
     const { id } = req.query;
 
