@@ -321,13 +321,41 @@ const Dashboard = () => {
     setTimeout(() => setIsChangingMonth(false), 500);
   };
 
-  const navigateToNextMonth = () => {
+  const navigateToNextMonth = async () => {
     const newMonth = selectedMonth === 12 ? 1 : selectedMonth + 1;
     const newYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear;
     
     setIsChangingMonth(true);
     setSelectedMonth(newMonth);
     setSelectedYear(newYear);
+    
+    // Trigger rollover when moving forward to ensure budget continuity
+    try {
+      console.log(`🔄 Triggering rollover from ${selectedMonth}/${selectedYear} to ${newMonth}/${newYear}`);
+      const rolloverResponse = await fetch('/api/budget/rollover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromMonth: selectedMonth,
+          fromYear: selectedYear,
+          toMonth: newMonth,
+          toYear: newYear
+        })
+      });
+      
+      const rolloverResult = await rolloverResponse.json();
+      if (rolloverResult.success) {
+        console.log(`✅ Rollover completed:`, rolloverResult.message);
+        if (rolloverResult.details && !rolloverResult.alreadyExists) {
+          // Show rollover summary to user
+          showAlert(`📊 Monthly Rollover Complete!\n\n• Carried forward: ${rolloverResult.details.carriedForwardBudgets} budgets ($${rolloverResult.details.totalCarriedForward.toFixed(2)})\n• Cash overspending deduction: $${rolloverResult.details.cashOverspendingDeduction.toFixed(2)}\n• Credit card overspending reset: $${rolloverResult.details.creditCardOverspendingReset.toFixed(2)}`, 'success');
+        }
+      } else {
+        console.error('⚠️ Rollover failed:', rolloverResult.error);
+      }
+    } catch (error) {
+      console.error('⚠️ Rollover error:', error);
+    }
     
     // Ensure "To Be Assigned" budget exists for the new month
     ensureToBeAssignedForMonth(newMonth, newYear);
