@@ -310,6 +310,9 @@ const Dashboard = () => {
     setSelectedMonth(newMonth);
     setSelectedYear(newYear);
     
+    // Ensure "To Be Assigned" budget exists for the new month
+    ensureToBeAssignedForMonth(newMonth, newYear);
+    
     // Trigger instant refresh of all data for new month
     refreshDashboard();
     refreshTransactions();
@@ -326,6 +329,9 @@ const Dashboard = () => {
     setSelectedMonth(newMonth);
     setSelectedYear(newYear);
     
+    // Ensure "To Be Assigned" budget exists for the new month
+    ensureToBeAssignedForMonth(newMonth, newYear);
+    
     // Trigger instant refresh of all data for new month
     refreshDashboard();
     refreshTransactions();
@@ -335,9 +341,15 @@ const Dashboard = () => {
   };
 
   const navigateToCurrentMonth = () => {
+    const currentMonth = new Date().getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    
     setIsChangingMonth(true);
-    setSelectedMonth(new Date().getMonth() + 1);
-    setSelectedYear(new Date().getFullYear());
+    setSelectedMonth(currentMonth);
+    setSelectedYear(currentYear);
+    
+    // Ensure "To Be Assigned" budget exists for the current month
+    ensureToBeAssignedForMonth(currentMonth, currentYear);
     
     // Trigger instant refresh of dashboard data for current month
     refreshDashboard();
@@ -345,6 +357,20 @@ const Dashboard = () => {
     
     // Clear loading state after a short delay to allow SWR to update
     setTimeout(() => setIsChangingMonth(false), 500);
+  };
+
+  // Ensure "To Be Assigned" budget exists for a given month
+  const ensureToBeAssignedForMonth = async (month: number, year: number) => {
+    try {
+      console.log(`💰 Ensuring "To Be Assigned" budget exists for ${month}/${year}`);
+      
+      // Call the dashboard API to trigger FinancialCalculator.ensureToBeAssignedBudget
+      await fetch(`/api/dashboard?month=${month}&year=${year}`);
+      
+      console.log(`✅ "To Be Assigned" budget ensured for ${month}/${year}`);
+    } catch (error) {
+      console.error(`❌ Failed to ensure "To Be Assigned" budget for ${month}/${year}:`, error);
+    }
   };
 
   // Format selected month/year for display
@@ -655,25 +681,25 @@ const Dashboard = () => {
         ]);
         
       } else {
-        // Normal budget-to-budget transfer
+        // Normal budget-to-budget transfer (To Be Assigned no longer in this flow)
         const sourceBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
           .find((budget: any) => budget.id === moveMoneySource.id);
         const targetBudget = dashboardData?.categories?.flatMap((cat: any) => cat.budgets || [])
-          .find((budget: any) => budget.id === sourceBudgetId); // In normal mode, this is actually the target
-        
-        if (!sourceBudget || !targetBudget) {
-          throw new Error('Source or target budget not found');
-        }
-        
-        // Calculate new amounts
-        const newSourceAmount = Math.max(0, sourceBudget.budgeted - amount);
-        const newTargetAmount = targetBudget.budgeted + amount;
-        
-        // Use SWR optimistic updates for both budgets
-        await Promise.all([
-          updateBudgetOptimistic(moveMoneySource.id, { amount: newSourceAmount }),
-          updateBudgetOptimistic(sourceBudgetId, { amount: newTargetAmount })
-        ]);
+            .find((budget: any) => budget.id === sourceBudgetId); // In normal mode, this is actually the target
+          
+          if (!sourceBudget || !targetBudget) {
+            throw new Error('Source or target budget not found');
+          }
+          
+          // Calculate new amounts
+          const newSourceAmount = Math.max(0, sourceBudget.budgeted - amount);
+          const newTargetAmount = targetBudget.budgeted + amount;
+          
+          // Use SWR optimistic updates for both budgets
+          await Promise.all([
+            updateBudgetOptimistic(moveMoneySource.id, { amount: newSourceAmount }),
+            updateBudgetOptimistic(sourceBudgetId, { amount: newTargetAmount })
+          ]);
       }
       
       // Clear source after successful transfer
@@ -745,10 +771,18 @@ const Dashboard = () => {
 
   const handleCreateTransaction = async (transactionData: any) => {
     try {
-      // Use SWR optimistic update for transaction creation with account data
-      await createTransactionOptimistic(transactionData, finalAccounts);
+      console.log('🚀 Creating transaction with instant updates:', transactionData);
+      
+      // Use SWR optimistic update for transaction creation
+      await createTransactionOptimistic(transactionData);
+      
+      // Trigger additional instant refreshes for current month view
+      refreshDashboard();
+      refreshTransactions();
+      
+      console.log('✅ Manual transaction created with instant UI updates');
     } catch (error) {
-      console.error('Error creating transaction:', error);
+      console.error('❌ Error creating transaction:', error);
       showError('Failed to create transaction. Please try again.');
     }
   };
@@ -1630,6 +1664,10 @@ const Dashboard = () => {
   // Use the new category groups structure from the API
   const categoryGroups: { [key: string]: any[] } = {};
   
+  // Don't add "To Be Assigned" as a moveable budget item 
+  // It should only be used via the "Assign Money" functionality
+  // Adding it as a budget item creates double-counting issues
+  
   if (dashboardData?.categories) {
     dashboardData.categories.forEach((categoryGroup: any) => {
       // Each category group now has a 'budgets' array with the actual budget items
@@ -1677,6 +1715,7 @@ const Dashboard = () => {
 
   const getStatusColor = (status: string) => {
     switch(status) {
+      case 'credit-card-overspent': return 'text-yellow-700 bg-yellow-100';
       case 'overspent': return 'text-red-600 bg-red-50';
       case 'on-track': return 'text-green-600 bg-green-50';
       case 'goal': return 'text-blue-600 bg-blue-50';
@@ -2203,8 +2242,8 @@ const Dashboard = () => {
                     categories={categories}
                     formatCurrency={formatCurrency}
                     getStatusColor={getStatusColor}
-                    onEditBudget={handleEditBudget}
-                    onDeleteBudget={handleDeleteBudget}
+                    onEditBudget={groupName === 'Income' ? () => {} : handleEditBudget} // Disable editing for Income (To Be Assigned)
+                    onDeleteBudget={groupName === 'Income' ? () => {} : handleDeleteBudget} // Disable deleting for Income (To Be Assigned)
                     onInitiateMoveMoney={handleInitiateMoveMoney}
                     onSelectBudget={handleBudgetSelect}
                     selectedBudgetId={selectedBudget?.id}
@@ -2716,21 +2755,21 @@ const Dashboard = () => {
           name: moveMoneySource.name,
           available: moveMoneySource.available,
         } : { id: '', name: '', available: 0 }}
-        availableBudgets={dashboardData?.categories?.flatMap((group: any) => 
-          group.budgets?.map((budget: any) => ({
+        availableBudgets={Object.entries(categoryGroups).flatMap(([groupName, budgets]) => 
+          budgets.map((budget: any) => ({
             id: budget.id,
             name: budget.name,
-            category: group.name,
+            category: groupName,
             available: budget.available,
           })).filter((budget: any) => {
             // For goal funding mode, exclude the goal's own budget and only show budgets with available money
             if (moveMoneySource?.id === '__GOAL_FUNDING__') {
               return budget.id !== moveMoneySource.targetGoalBudgetId && budget.available > 0;
             }
-            // For normal mode, exclude the source budget
+            // For normal mode, exclude the source budget BUT INCLUDE overspent budgets
             return budget.id !== moveMoneySource?.id;
-          }) || []
-        ).filter((budget: any) => budget) || []}
+          })
+        )}
         position={moveMoneyPosition}
       />
 

@@ -155,6 +155,25 @@ export default function CategorySelectionFlyout({
         <div className="max-h-80 overflow-y-auto">
           {!showNewCategoryForm ? (
             <>
+              {/* Quick Access - To Be Assigned */}
+              {!searchTerm && (
+                <div className="border-b border-found-divider">
+                  <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Quick Access
+                  </div>
+                  <button
+                    onClick={() => onSelectCategory('To Be Assigned')}
+                    className={`w-full px-4 py-3 text-left hover:bg-found-divider/30 transition-colors flex items-center space-x-3 ${
+                      currentCategory === 'To Be Assigned' ? 'bg-found-primary/10 text-found-primary' : 'text-found-text'
+                    }`}
+                  >
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span className="font-medium">To Be Assigned</span>
+                    <span className="text-xs text-gray-500 ml-auto">Income</span>
+                  </button>
+                </div>
+              )}
+              
               {Object.entries(groupedFilteredBudgets).map(([groupName, budgets]) => {
                 const isExpanded = expandedGroups.has(groupName);
                 return (

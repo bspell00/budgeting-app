@@ -77,10 +77,10 @@ export function useTransactions(accountId?: string, month?: number, year?: numbe
       const updatedTransaction = await response.json();
       console.log('✅ Transaction updated successfully:', updatedTransaction);
 
-      // Refresh all related data immediately
+      // Refresh all related data immediately (including month/year variants)
       mutate(key);
-      mutate('/api/transactions');
-      mutate('/api/dashboard'); // Update dashboard for budget changes
+      mutate((k) => typeof k === 'string' && k.startsWith('/api/transactions'));
+      mutate((k) => typeof k === 'string' && k.startsWith('/api/dashboard')); // Update dashboard for budget changes
       
       return updatedTransaction;
     } catch (error) {
@@ -107,10 +107,10 @@ export function useTransactions(accountId?: string, month?: number, year?: numbe
       const newTransaction = await response.json();
       console.log('✅ Transaction created successfully:', newTransaction);
 
-      // Refresh all related data immediately
+      // Refresh all related data immediately (including month/year variants)
       mutate(key);
-      mutate('/api/transactions');
-      mutate('/api/dashboard');
+      mutate((k) => typeof k === 'string' && k.startsWith('/api/transactions'));
+      mutate((k) => typeof k === 'string' && k.startsWith('/api/dashboard'));
       
       return newTransaction;
     } catch (error) {
@@ -134,10 +134,10 @@ export function useTransactions(accountId?: string, month?: number, year?: numbe
 
       console.log('✅ Transaction deleted successfully');
 
-      // Refresh all related data immediately
+      // Refresh all related data immediately (including month/year variants)
       mutate(key);
-      mutate('/api/transactions');
-      mutate('/api/dashboard');
+      mutate((k) => typeof k === 'string' && k.startsWith('/api/transactions'));
+      mutate((k) => typeof k === 'string' && k.startsWith('/api/dashboard'));
       
       return true;
     } catch (error) {
@@ -184,7 +184,7 @@ export function useTransactions(accountId?: string, month?: number, year?: numbe
     createCreditCardPaymentTransfer,
     refresh: () => {
       mutate(key);
-      mutate('/api/dashboard');
+      mutate((k) => typeof k === 'string' && k.startsWith('/api/dashboard'));
     }
   };
 }

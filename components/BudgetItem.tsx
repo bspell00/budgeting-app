@@ -183,7 +183,8 @@ export default function BudgetItem({
               {budget.name}
             </span>
             <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${getStatusColor(budget.status)}`}>
-              {budget.status === 'overspent' ? 'Over' : 
+              {budget.status === 'credit-card-overspent' ? 'CC Over' :
+               budget.status === 'overspent' ? 'Over' : 
                budget.status === 'goal' ? 'Goal' : 'OK'}
             </span>
           </div>
@@ -194,6 +195,7 @@ export default function BudgetItem({
           <div className="mt-1 w-full bg-found-divider rounded-full h-1">
             <div 
               className={`h-1 rounded-full ${
+                budget.status === 'credit-card-overspent' ? 'bg-yellow-500' :
                 budget.available < 0 ? 'bg-red-500' : 'bg-found-accent'
               }`}
               style={{

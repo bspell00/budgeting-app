@@ -46,8 +46,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       })
     ]);
 
-    // Format categories for dashboard display
-    const categories = FinancialCalculator.formatBudgetsForDashboard(metrics.budgets.all);
+    // Enhanced format categories with credit card overspending detection
+    const categories = await FinancialCalculator.formatBudgetsForDashboard(
+      metrics.budgets.all, 
+      userId, 
+      targetMonth, 
+      targetYear
+    );
 
     // Transform goals data and link to corresponding budgets
     const transformedGoals = goals.map(goal => {
@@ -99,6 +104,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const dashboardData = {
       // Core financial metrics (single source of truth)
       toBeAssigned: metrics.budgets.toBeAssigned - (metrics.budgets.toBeAssignedBudget?.spent || 0),
+      toBeAssignedBudget: metrics.budgets.toBeAssignedBudget, // Include the actual budget object with real ID
       totalBudgeted: metrics.budgets.totalBudgeted,
       totalSpent: metrics.budgets.totalSpent,
       totalBalance: metrics.accounts.netWorth,

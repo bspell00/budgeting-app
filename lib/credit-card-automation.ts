@@ -535,12 +535,12 @@ export class CreditCardAutomation {
           });
         }
 
-        // Transfer money from spending budget to credit card payment budget
-        await prisma.budget.update({
-          where: { id: budgetId },
-          data: { amount: { decrement: transferAmount } }
-        });
-
+        // YNAB Logic: Money stays in spending budget AND goes to credit card payment budget
+        // The spending budget keeps the money to cover overspending
+        // The credit card payment budget gets additional money to pay the bill
+        
+        // DO NOT decrement the spending budget - the money needs to stay there to cover overspending!
+        // Only increment the credit card payment budget
         await prisma.budget.update({
           where: { id: creditCardBudget.id },
           data: { amount: { increment: transferAmount } }

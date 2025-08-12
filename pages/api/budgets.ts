@@ -169,19 +169,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         }
         
-        // Trigger credit card automation if budget amount was increased (money assigned)
-        if (parseFloat(amount) > existingBudget.amount) {
-          const assignedAmount = parseFloat(amount) - existingBudget.amount;
-          console.log(`🔄 Triggering credit card automation for ${updatedBudget.name} - assigned $${assignedAmount}`);
-          try {
-            const result = await CreditCardAutomation.processBudgetAssignment(
-              userId,
-              updatedBudget.id,
-              assignedAmount
-            );
-            console.log(`✅ Automation result:`, result.message);
-          } catch (automationError) {
-            console.error('❌ Credit card automation failed for budget assignment:', automationError);
+        // Smart credit card automation: Handle both increasing and decreasing budgets
+        const amountChange = parseFloat(amount) - existingBudget.amount;
+        
+        if (amountChange !== 0) {
+          // Check if this category has credit card transactions
+          const creditCardTransactions = await prisma.transaction.findMany({
+            where: {
+              userId: userId,
+              category: updatedBudget.name,
+              account: {
+                accountType: 'credit'
+              },
+              amount: { lt: 0 }, // Expenses (negative amounts)
+              date: {
+                gte: new Date(updatedBudget.year, updatedBudget.month - 1, 1),
+                lt: new Date(updatedBudget.year, updatedBudget.month, 1),
+              }
+            },
+            include: { account: true }
+          });
+          
+          if (creditCardTransactions.length > 0) {
+            if (amountChange > 0) {
+              // INCREASING budget - trigger normal credit card automation
+              const totalCreditSpending = creditCardTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+              const overspentAmount = Math.max(0, totalCreditSpending - existingBudget.amount);
+              
+              if (overspentAmount > 0) {
+                const coverageAmount = Math.min(amountChange, overspentAmount);
+                
+                console.log(`🔄 Covering credit card overspending: ${updatedBudget.name} - covering $${coverageAmount} of $${overspentAmount} overspent`);
+                
+                try {
+                  const result = await CreditCardAutomation.processBudgetAssignment(
+                    userId,
+                    updatedBudget.id,
+                    coverageAmount
+                  );
+                  console.log(`✅ Credit card automation result:`, result.message);
+                } catch (automationError) {
+                  console.error('❌ Credit card automation failed for overspending coverage:', automationError);
+                }
+              }
+            } else {
+              // DECREASING budget - reverse credit card automation
+              const reductionAmount = Math.abs(amountChange);
+              console.log(`🔄 Reducing credit card coverage: ${updatedBudget.name} - removing $${reductionAmount} from credit card payments`);
+              
+              // Find and reduce credit card payment budgets
+              for (const transaction of creditCardTransactions) {
+                const creditCardName = transaction.account?.accountName || 'Unknown';
+                const creditCardBudget = await prisma.budget.findFirst({
+                  where: {
+                    userId: userId,
+                    name: `${creditCardName} Payment`,
+                    category: 'Credit Card Payments',
+                    month: updatedBudget.month,
+                    year: updatedBudget.year
+                  }
+                });
+                
+                if (creditCardBudget && creditCardBudget.amount >= reductionAmount) {
+                  await prisma.budget.update({
+                    where: { id: creditCardBudget.id },
+                    data: { amount: { decrement: reductionAmount } }
+                  });
+                  
+                  console.log(`✅ Reduced ${creditCardName} Payment budget by $${reductionAmount}`);
+                  break; // Only reduce from one credit card for now
+                }
+              }
+            }
           }
         }
       }

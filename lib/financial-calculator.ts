@@ -65,9 +65,13 @@ export class FinancialCalculator {
     const totalDebtBalance = debtAccounts.reduce((sum, account) => sum + account.balance, 0);
     const totalNetWorth = totalCashBalance + totalDebtBalance;
 
-    // Calculate budget totals
-    const allBudgetsExceptTBA = budgets.filter(budget => budget.name !== 'To Be Assigned');
-    const totalBudgetedByUser = allBudgetsExceptTBA.reduce((sum, budget) => sum + budget.amount, 0);
+    // Calculate budget totals - exclude "To Be Assigned" and credit card payments 
+    // Credit card payments are money transfers, not additional budgeting
+    const actualUserBudgets = budgets.filter(budget => 
+      budget.name !== 'To Be Assigned' && 
+      budget.category !== 'Credit Card Payments'
+    );
+    const totalBudgetedByUser = actualUserBudgets.reduce((sum, budget) => sum + budget.amount, 0);
     const totalSpent = budgets.reduce((sum, budget) => sum + budget.spent, 0);
     
     // Core YNAB calculation: To Be Assigned = Available Cash - Budgeted
@@ -85,7 +89,7 @@ export class FinancialCalculator {
       },
       budgets: {
         all: budgets,
-        userBudgets: allBudgetsExceptTBA,
+        userBudgets: actualUserBudgets,
         totalBudgeted: totalBudgetedByUser,
         totalSpent,
         toBeAssigned: correctToBeAssigned
@@ -263,9 +267,43 @@ export class FinancialCalculator {
   }
 
   /**
-   * Format budgets for dashboard display
+   * Format budgets for dashboard display with credit card overspending detection
    */
-  static formatBudgetsForDashboard(budgets: any[]) {
+  static async formatBudgetsForDashboard(budgets: any[], userId?: string, month?: number, year?: number) {
+    // First, detect which overspent budgets have credit card transactions if userId is provided
+    let creditCardOverspentBudgets = new Set<string>();
+    
+    if (userId && month && year) {
+      try {
+        // Find all overspent budgets
+        const overspentBudgets = budgets.filter(b => b.spent > b.amount && b.name !== 'To Be Assigned');
+        
+        // Check each overspent budget for credit card transactions
+        for (const budget of overspentBudgets) {
+          const creditCardTransactions = await prisma.transaction.findMany({
+            where: {
+              userId: userId,
+              category: budget.name,
+              account: {
+                accountType: 'credit'
+              },
+              amount: { lt: 0 }, // Expenses only
+              date: {
+                gte: new Date(year, month - 1, 1),
+                lt: new Date(year, month, 1),
+              }
+            }
+          });
+          
+          if (creditCardTransactions.length > 0) {
+            creditCardOverspentBudgets.add(budget.name);
+          }
+        }
+      } catch (error) {
+        console.error('Error detecting credit card overspending:', error);
+      }
+    }
+
     const budgetsByCategory = budgets.reduce((acc, budget) => {
       // Skip "To Be Assigned" - it's handled separately
       if (budget.name === 'To Be Assigned') {
@@ -284,13 +322,19 @@ export class FinancialCalculator {
         acc[categoryGroup] = [];
       }
       
+      // Determine status with credit card overspending detection
+      let status = 'on-track';
+      if (budget.spent > budget.amount) {
+        status = creditCardOverspentBudgets.has(budget.name) ? 'credit-card-overspent' : 'overspent';
+      }
+      
       acc[categoryGroup].push({
         id: budget.id,
         name: budget.name,
         budgeted: budget.amount,
         spent: budget.spent,
         available: budget.amount - budget.spent,
-        status: budget.spent > budget.amount ? 'overspent' : 'on-track',
+        status: status,
       });
       
       return acc;
